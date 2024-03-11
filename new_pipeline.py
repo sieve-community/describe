@@ -7,9 +7,11 @@ import concurrent.futures
 import time
 
 pyscenedetect = sieve.function.get("sieve/pyscenedetect")
+moondream = sieve.function.get("sieve/moondream")
 cogvlm = sieve.function.get("sieve/cogvlm-chat")
 whisper = sieve.function.get("sieve/speech_transcriber")
-
+starling = sieve.function.get("sieve-internal/starling")
+internlm = sieve.function.get("sieve-internal/internlmx-composer-2q")
 
 def merge_short_scenes(scenes, min_duration=60):
     # Create a new list to store the merged scenes
@@ -102,7 +104,6 @@ def compute_frames(scenes, level_of_detail="medium"):
             ]
 
     return frames
-
 
 def merge_scene_transcripts(scene_data, transcript_data):
     # Initialize a dictionary to hold the result
@@ -203,8 +204,9 @@ def main(
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ret, frame = cap.read()
             if ret:
+                cv2.imwrite(f"frame{frame_number}.jpg", frame)
                 frame_analysis[frame_number] = cogvlm.push(
-                    sieve.Image(array=frame),
+                    sieve.Image(path=f"frame{frame_number}.jpg"),
                     "What is happening in this image? Write in detail.",
                 )
         cap.release()
@@ -214,8 +216,9 @@ def main(
         scene_analysis[transcript]["transcript"] = scene_transcript[transcript]
 
     client = OpenAI()
+    os.environ["OPENAI_API_KEY"] = "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"
+
     API_KEY = os.getenv("OPENAI_API_KEY")
-    # os.environ["OPENAI_API_KEY"] = "API_KEY"
 
     scene_summaries = {}
     for scene in scene_analysis:
@@ -224,29 +227,42 @@ def main(
                 print("string test")
             else:
                 scene_analysis[scene][frame] = scene_analysis[scene][frame].result()
+                print(scene_analysis[scene][frame])
                 print("result test")
             
-        completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": """You are a helpful assistant. When provided with a list of captions describing the frames of a certain scene in a video and its transcript, you generate a single detailed summary of that scene by combining the information""",
-                },
-                {
-                    "role": "user",
-                    "content": f"""Can you provide a comprehensive summary of the given scene using the provided visual captions and transcript? Please meet the following constraints:
-                 - The Summary should cover all the key points and main ideas present in the transcript
-                 - The Summary should include sufficient visual elements to provide a clear understanding of the scene
-                 - The summary should condense the information into a concise and easy-to-understand format
-                 - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
-                 - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
+        # completion = client.chat.completions.create(
+        #     model="gpt-3.5-turbo",
+        #     messages=[
+        #         {
+        #             "role": "system",
+        #             "content": """You are a helpful assistant. When provided with a list of captions describing the frames of a certain scene in a video and its transcript, you generate a single detailed summary of that scene by combining the information""",
+        #         },
+        #         {
+        #             "role": "user",
+        #             "content": f"""Can you provide a comprehensive summary of the given scene using the provided visual captions and transcript? Please meet the following constraints:
+        #          - The Summary should cover all the key points and main ideas present in the transcript
+        #          - The Summary should include sufficient visual elements to provide a clear understanding of the scene
+        #          - The summary should condense the information into a concise and easy-to-understand format
+        #          - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
+        #          - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
                  
-                 Captions and transcript: {scene_analysis[scene]}""",
-                },
-            ],
-        )
-        scene_summaries[scene] = completion.choices[0].message.content
+        #          Captions and transcript: {scene_analysis[scene]}""",
+        #         },
+        #     ],
+        # )
+        # scene_summaries[scene] = completion.choices[0].message.content
+                
+        completion = starling.run(user_prompt=f"""Can you provide a comprehensive summary of the given scene using the provided visual captions and transcript? Please meet the following constraints:
+                  - The Summary should cover all the key points and main ideas present in the transcript
+                  - The Summary should include sufficient visual elements to provide a clear understanding of the scene
+                  - The summary should condense the information into a concise and easy-to-understand format
+                  - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
+                  - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
+                 
+                  Captions and transcript: {scene_analysis[scene]}""")
+
+        scene_summaries[scene] = completion
+        print("scene summaries test", scene_summaries[scene])
 
     print(scene_summaries)
 
@@ -255,33 +271,43 @@ def main(
     if summary_length == "concise":
         concise = "- The Summary should be concise, short, and to the point, avoiding any repetition. "
 
-    completion = client.chat.completions.create(
-        model="gpt-4-turbo-preview",
-        messages=[
-            {
-                "role": "system",
-                "content": """You are a helpful assistant. When provided with visual and audio summaries of a certain video, you generate a single detailed audiovisual summary of that video by combining the information.""",
-            },
-            {
-                "role": "user",
-                "content": f"""Provide a comprehensive summary of the given video using the provided visual and audio summaries of each scene in the video. Please meet the following constraints:
-             - The Summary should cover all the key points and main ideas present in the visual and audio summaries
-             - The Summary should include sufficient visual elements to provide a clear understanding of the scene
-             - The summary should condense the information into a concise and easy-to-understand format
-             - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
-             - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
-             - The summary should blend the visual and transcriptional information together instead of presenting them separately.
-             - Keep the tone neutral and informative, avoiding any personal opinions or biases.
-             {concise}
-             Visual and audio summaries: {scene_summaries}""",
-            },
-        ],
-    )
+    # completion = client.chat.completions.create(
+    #     model="gpt-4-turbo-preview",
+    #     messages=[
+    #         {
+    #             "role": "system",
+    #             "content": """You are a helpful assistant. When provided with visual and audio summaries of a certain video, you generate a single detailed audiovisual summary of that video by combining the information.""",
+    #         },
+    #         {
+    #             "role": "user",
+    #             "content": f"""Provide a comprehensive summary of the given video using the provided visual and audio summaries of each scene in the video. Please meet the following constraints:
+    #          - The Summary should cover all the key points and main ideas present in the visual and audio summaries
+    #          - The Summary should include sufficient visual elements to provide a clear understanding of the scene
+    #          - The summary should condense the information into a concise and easy-to-understand format
+    #          - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
+    #          - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
+    #          - The summary should blend the visual and transcriptional information together instead of presenting them separately.
+    #          - Keep the tone neutral and informative, avoiding any personal opinions or biases.
+    #          {concise}
+    #          Visual and audio summaries: {scene_summaries}""",
+    #         },
+    #     ],
+    # )
 
-    video_summary = completion.choices[0].message.content
+    # video_summary = completion.choices[0].message.content
 
+    video_summary = starling.run(user_prompt=f"""Provide a comprehensive summary of the given video using the provided visual and audio summaries of each scene in the video. Please meet the following constraints:
+              - The Summary should cover all the key points and main ideas present in the visual and audio summaries
+              - The Summary should include sufficient visual elements to provide a clear understanding of the scene
+              - The summary should condense the information into a concise and easy-to-understand format
+              - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
+              - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
+              - The summary should blend the visual and transcriptional information together instead of presenting them separately.
+              - Keep the tone neutral and informative, avoiding any personal opinions or biases.
+              {concise}
+              Visual and audio summaries: {scene_summaries}""")
     return video_summary
 
 
 if __name__ == "__main__":
-    main.run(sieve.Video(path="ltt_test.mp4"), min_scene_duration=30, summary_length="concise", level_of_detail="medium")
+    main.run(sieve.Video(path="ltt_test.mp4"), min_scene_duration=30, summary_length="verbose", level_of_detail="high")
