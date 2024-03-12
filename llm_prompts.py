@@ -2,8 +2,6 @@ from pydantic import BaseModel, Field
 import os
 from openai import OpenAI
 
-os.environ["OPENAI_API_KEY"] = "API_KEY"
-
 API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI()
