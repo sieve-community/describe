@@ -2,23 +2,24 @@ from pydantic import BaseModel, Field
 import os
 from openai import OpenAI
 
-os.environ["OPENAI_API_KEY"] = "API_KEY"
+os.environ["OPENAI_API_KEY"] = "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"
 
 API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI()
 
-
+# Define the custom types for the LLM prompts
 class SummaryPrompt(BaseModel):
     content: list = Field(..., description="The content to be summarized")
     level_of_detail: str = Field("concise", description="The level of detail for the summary")
 
+    # Method to generate transcript summary
     def transcript_summary(self):
         detail = ""
         if self.level_of_detail == "concise":
             detail = "- The summary should be concise and easy to understand, and should not be longer than 100 words."
         elif self.level_of_detail == "medium":
-            detail = "- The summary should be comprehensive and easy to understand, and should not be longer than 250 words."
+            detail = "- The summary should be easy to understand, and should not be longer than 250 words."
         elif self.level_of_detail == "detailed":
             detail = "- The summary should be comprehensive and easy to understand, and should not be longer than 500 words."
 
@@ -46,6 +47,7 @@ class SummaryPrompt(BaseModel):
         )
         return completion.choices[0].message.content
     
+    # Method to generate video summary
     def video_summary(self):
         detail = ""
         if self.level_of_detail == "concise":
@@ -81,6 +83,7 @@ class SummaryPrompt(BaseModel):
         )
         return completion.choices[0].message.content
     
+    # Method to generate audiovisual summary
     def audiovisual_summary(self):
         detail = ""
         if self.level_of_detail == "concise":
