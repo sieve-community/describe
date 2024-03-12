@@ -1,0 +1,108 @@
+import concurrent.futures
+import sieve
+import cv2
+import os
+import subprocess
+from custom_types import Video, VideoChunk
+from llm_prompts import SummaryPrompt
+import time
+from openai import OpenAI
+
+whisper = sieve.function.get("sieve/speech_transcriber")
+moondream = sieve.function.get("sieve/moondream")
+starling = sieve.function.get("sieve-internal/starling")
+internlm = sieve.function.get("sieve-internal/internlmx-composer-2q")
+
+@sieve.function(
+    name="visual_summarizer",
+    python_packages=["openai", "numpy", "opencv-python"],
+    system_packages=["ffmpeg"],
+    python_version="3.10",
+)
+def main(
+    video: sieve.Video,
+    level_of_detail: str = "medium",
+):
+    """
+    Summarize the video
+    """
+    # Load the video
+    start_time = time.time()
+    video_path = video.path
+
+    # Extract audio
+    audio_path = "audio.wav"
+    subprocess.run(["ffmpeg", "-i", video_path, audio_path, "-y"])
+    
+    transcript = []
+    for transcript_chunk in whisper.run(sieve.File(path=audio_path)):
+        transcript.append(transcript_chunk)
+    transcript = [segment["segments"] for segment in transcript]
+    # Extract only the start, end, and text for each segment, excluding the "words" part
+    transcript = [
+        {"start": item["start"], "end": item["end"], "text": item["text"]}
+        for sublist in transcript
+        for item in sublist
+    ]
+
+    video = Video(path=video_path, transcript=transcript)
+
+    # Extract chunk durations
+    chunk_size = 60
+    chunk_durations = video.extract_chunk_durations(chunk_size)
+
+    # Prepare for parallel execution
+    def process_chunk(chunk_data):
+        i, (start, end) = chunk_data
+        chunk = VideoChunk(
+            chunk_number=i,
+            start_time=start,
+            end_time=end,
+            source_video_path=video_path,
+            source_transcript=transcript,
+        )
+        keyframe_paths = chunk.compute_keyframes()
+        chunk_transcript = chunk.compute_chunk_transcript()
+
+        # transcript_summary = starling.run(user_prompt = f"Summarize the following transcript: {chunk_transcript}")
+        transcript_summary = SummaryPrompt(content=list(chunk_transcript), level_of_detail=level_of_detail).transcript_summary()
+        
+        chunk_captions = {}
+
+        captions = {}
+        for keyframe_path in keyframe_paths:
+            keyframe_caption = internlm.run("Write a detailed caption for this image", sieve.Image(path=keyframe_path))
+            captions[keyframe_path] = keyframe_caption
+
+        # print("CAPTIONS TEST", captions)
+        captions_list = list(captions.values())
+        visual_summary = SummaryPrompt(content=captions_list, level_of_detail=level_of_detail).video_summary()
+
+        chunk_captions[i] = transcript_summary, visual_summary
+
+        return chunk_captions
+
+    chunk_summaries = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_chunk, (i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                # Process the result if needed
+                chunk_summaries.append(result)
+            except Exception as exc:
+                print(f"Generated an exception: {exc}")
+
+    # Sort the list by the keys
+    
+    sorted_data = sorted(chunk_summaries, key=lambda x: next(iter(x)))
+    # print("sorted_data", sorted_data)
+    # Combine the results into a single summary
+
+    summary = SummaryPrompt(content=sorted_data, level_of_detail=level_of_detail).audiovisual_summary()
+
+    print(f"Time taken: {time.time() - start_time}")
+    return summary
+
+if __name__ == "__main__":
+    main.run(sieve.Video(path="ltt_test.mp4"), level_of_detail="detailed")

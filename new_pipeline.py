@@ -127,7 +127,6 @@ def merge_scene_transcripts(scene_data, transcript_data):
 
     return scene_transcripts
 
-
 @sieve.function(
     name="visual_summarizer",
     python_packages=["openai", "numpy", "opencv-python"],
@@ -162,6 +161,8 @@ def main(
         for sublist in transcript
         for item in sublist
     ]
+
+    print("transcript test", transcript)
     scenes_list = list(scenes_output)
 
     if len(scenes_list) == 0:  # This checks if scenes_output is empty
@@ -205,8 +206,8 @@ def main(
             ret, frame = cap.read()
             if ret:
                 cv2.imwrite(f"frame{frame_number}.jpg", frame)
-                frame_analysis[frame_number] = cogvlm.push(
-                    sieve.Image(path=f"frame{frame_number}.jpg"),
+                frame_analysis[frame_number] = moondream.push(
+                    sieve.File(path=f"frame{frame_number}.jpg"),
                     "What is happening in this image? Write in detail.",
                 )
         cap.release()
