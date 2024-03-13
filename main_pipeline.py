@@ -13,7 +13,7 @@ metadata = sieve.Metadata(
 # Sieve functions
 whisper = sieve.function.get("sieve/speech_transcriber")
 moondream = sieve.function.get("sieve/moondream")
-internlm = sieve.function.get("sieve-internal/internlmx-composer-2q")
+internlm = sieve.function.get("sieve/internlmx-composer-2q")
 cogvlm = sieve.function.get("sieve/cogvlm-chat")
 
 @sieve.function(
