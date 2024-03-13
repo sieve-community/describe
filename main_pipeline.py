@@ -6,8 +6,7 @@ from llm_prompts import SummaryPrompt
 import time
 
 metadata = sieve.Metadata(
-    description="Summarize a video by generating a transcript and visual summary",
-    image=sieve.Image(path="logo.webp"),
+    description="Describe a video by utilizing its visuals and spoken content",
     readme=open("README.md", "r").read(),
 )
 
@@ -23,18 +22,21 @@ cogvlm = sieve.function.get("sieve/cogvlm-chat")
     system_packages=["ffmpeg"],
     python_version="3.10",
     metadata=metadata,
+    environment_variables=[
+        sieve.Env(name="OPENAI_API_KEY", description="OpenAI API Key")
+    ],
 )
 def main(
-    video: sieve.Video,
-    summary_type: str = "medium",
+    video: sieve.File,
+    conciseness: str = "medium",
     visual_detail: str = "medium",
-    include_transcript: bool = True,
+    spoken_context: bool = True,
 ):
     """
     :param video: The video to be summarized
-    :param summary_type: {concise, medium, detailed} The level of detail for the final summary
-    :param visual_detail: {low, medium, high} The level of visual detail for the final summary
-    :param include_transcript: Whether to use the transcript when generating the final summary
+    :param conciseness: The level of detail for the final summary. Pick from 'concise', 'medium', or 'detailed'
+    :param visual_detail: The level of visual detail for the final summary. Pick from 'low', 'medium', or 'high'
+    :param spoken_context: Whether to use the transcript when generating the final summary
     :return: The summarized content
     """
     # Load the video
@@ -47,7 +49,7 @@ def main(
     
     # Transcribe the audio
     print("Transcribing audio...")
-    if include_transcript:
+    if spoken_context:
         transcript = []
         for transcript_chunk in whisper.run(sieve.File(path=audio_path)):
             transcript.append(transcript_chunk)
@@ -80,8 +82,8 @@ def main(
         keyframe_paths = chunk.compute_keyframes()
         chunk_transcript = chunk.compute_chunk_transcript()
 
-        if include_transcript:
-            transcript_summary = SummaryPrompt(content=list(chunk_transcript), level_of_detail=summary_type).transcript_summary()
+        if spoken_context:
+            transcript_summary = SummaryPrompt(content=list(chunk_transcript), level_of_detail=conciseness).transcript_summary()
         
         chunk_captions = {}
 
@@ -89,21 +91,28 @@ def main(
         captions = {}
         for keyframe_path in keyframe_paths:
             if visual_detail == "low":
-                keyframe_caption = moondream.run(sieve.File(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = moondream.push(sieve.File(path=keyframe_path), "Describe this image in detail")
             if visual_detail == "medium":
-                keyframe_caption = internlm.run(sieve.File(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = internlm.push(sieve.File(path=keyframe_path), "Describe this image in detail")
             if visual_detail == "high":
-                keyframe_caption = cogvlm.run(sieve.Image(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = cogvlm.push(sieve.Image(path=keyframe_path), "Describe this image in detail")
             captions[keyframe_path] = keyframe_caption
-
-        captions_list = list(captions.values())
+        
+        captions_futures = list(captions.values())
+        captions_list = []
+        for future in concurrent.futures.as_completed(captions_futures):
+            try:
+                result = future.result()
+                captions_list.append(result)
+            except Exception as exc:
+                print(f"Generated an exception: {exc}")
 
         if video.compute_duration() > 1200:
-            visual_summary = captions_list
+            visual_summary = list(captions.values())
         else:
-            visual_summary = SummaryPrompt(content=captions_list, level_of_detail=summary_type).video_summary()
+            visual_summary = SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
 
-        if include_transcript:
+        if spoken_context:
             chunk_captions[i] = transcript_summary, visual_summary
         else:
             chunk_captions[i] = visual_summary
@@ -131,10 +140,10 @@ def main(
     print("Combining results...")
 
     # Combine the results into a single summary
-    summary = SummaryPrompt(content=sorted_data, level_of_detail=summary_type).audiovisual_summary()
+    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness).audiovisual_summary()
 
     print(f"Time taken: {time.time() - start_time}")
     return summary
 
 if __name__ == "__main__":
-    main.run(sieve.Video(path="ltt_test.mp4"), summary_type="medium", visual_detail="medium", include_transcript=True)
+    main.run(sieve.File(path="ltt_test.mp4"), conciseness="medium", visual_detail="medium", spoken_context=True)
