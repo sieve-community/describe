@@ -4,6 +4,8 @@ import cv2
 import subprocess
 import os
 import json
+from decord import VideoReader
+from decord import cpu
 
 # Define the custom types for Vidoe and its chunks
 class Video(BaseModel):
@@ -37,15 +39,16 @@ class VideoChunk(BaseModel):
 
     def compute_keyframes(self):
         cap = cv2.VideoCapture(self.source_video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        vr = VideoReader(self.source_video_path, ctx=cpu(0))
+        fps = vr.get_avg_fps()
+        total_frames = len(vr)
         source_video_duration = total_frames / fps
         duration = self.end_time - self.start_time
 
         # Adjust frame_numbers based on source video duration
         if source_video_duration > 1200:  # If duration > 20 minutes, extract middle frame of the chunk
             frame_numbers = [int((self.start_time + duration / 2) * fps)]
-        elif source_video_duration > 300:  # If duration > 5 minutes, extract 1st and 3rd quarter frames of the chunk
+        elif source_video_duration > 300 or source_video_duration < 60:  # If duration > 5 minutes, extract 1st and 3rd quarter frames of the chunk
             frame_numbers = [
                 int((self.start_time + (duration / 4) * i) * fps) for i in [1, 3]
             ]
@@ -57,13 +60,12 @@ class VideoChunk(BaseModel):
 
         keyframe_paths = []
         for i, frame_number in enumerate(frame_numbers, start=1):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            success, frame = cap.read()
-            if success:
-                cv2.imwrite(f"{self.chunk_number}_{i}.jpg", frame)
-                keyframe_paths.append(f"{self.chunk_number}_{i}.jpg")
-            else:
-                print(f"Failed to extract frame {i} for chunk {self.chunk_number}.")
+            vr.seek(frame_number)
+            frame = vr.next().asnumpy()
+            # Save the keyframe as an image after doing BGR to RGB conversion
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(f"{self.chunk_number}_{i}.jpg", frame)
+            keyframe_paths.append(f"{self.chunk_number}_{i}.jpg")
         
         cap.release()
         return keyframe_paths

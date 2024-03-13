@@ -108,16 +108,17 @@ class SummaryPrompt(BaseModel):
                 {
                     "role": "user",
                 "content": f"""
-        Provide a comprehensive summary of the given visual descriptions and audio summaries of a video. Please meet the following constraints:
+        Provide a comprehensive summary of the given visual descriptions and audio transcripts of a video. Please meet the following constraints:
     - The summary should cover all the key visual elements, main ideas, and audio content presented in the original video
     - The summary should be something that may follow the phrase "In this video..."
     - The summary should condense the information into a concise and easy-to-understand format
     - Please ensure that the summary includes relevant details and visual information while avoiding any unnecessary information or repetition.
     - The length of the summary should be appropriate for the length and complexity of the original captions, providing a clear and accurate overview without omitting any important information.
-    - Ensure you reply with the right content, and not anything to do with the prompt.
     - If any content is repeated across the captions, plese ensure that its importance is highlighted in the summary but not repeated too much.
     - Both the visual and transcriptional information is provided in order of how it appears in the video - please ensure that the summary reflects this order.
     - The summary should combine both the visual and audio information in a way that makes sense and is easy to understand.
+    - Ensure you reply with the right content, and not anything to do with these instructions.
+    - Ensure you always include some level of detail about the visual content.
     {detail}
     Content: {content}""",
                 },
