@@ -17,7 +17,7 @@ cogvlm = sieve.function.get("sieve/cogvlm-chat")
 
 @sieve.function(
     name="describe",
-    python_packages=["openai", "numpy", "opencv-python"],
+    python_packages=["openai", "numpy", "opencv-python", "decord"],
     system_packages=["ffmpeg"],
     python_version="3.10",
     metadata=metadata,
@@ -27,7 +27,7 @@ cogvlm = sieve.function.get("sieve/cogvlm-chat")
 )
 def main(
     video: sieve.File,
-    conciseness: str = "medium",
+    conciseness: str = "concise",
     visual_detail: str = "medium",
     spoken_context: bool = True,
 ):
@@ -44,15 +44,11 @@ def main(
     start_time = time.time()
     video_path = video.path
 
-    # Extract audio
-    audio_path = "audio.wav"
-    subprocess.run(["ffmpeg", "-i", video_path, audio_path, "-y"])
-    
     # Transcribe the audio
     print("Transcribing audio...")
     if spoken_context:
         transcript = []
-        for transcript_chunk in whisper.run(sieve.File(path=audio_path)):
+        for transcript_chunk in whisper.run(sieve.File(path=video_path)):
             transcript.append(transcript_chunk)
         transcript = [segment["segments"] for segment in transcript]
         # Extract only the start, end, and text for each segment, excluding the "words" part
@@ -83,20 +79,17 @@ def main(
         keyframe_paths = chunk.compute_keyframes()
         chunk_transcript = chunk.compute_chunk_transcript()
 
-        if spoken_context:
-            transcript_summary = SummaryPrompt(content=list(chunk_transcript), level_of_detail=conciseness).transcript_summary()
-        
         chunk_captions = {}
 
         # Generate captions for each keyframe
         captions = {}
         for keyframe_path in keyframe_paths:
             if visual_detail == "low":
-                keyframe_caption = moondream.push(sieve.File(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = moondream.push(sieve.File(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
             if visual_detail == "medium":
-                keyframe_caption = internlm.push(sieve.File(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = internlm.push(sieve.File(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
             if visual_detail == "high":
-                keyframe_caption = cogvlm.push(sieve.Image(path=keyframe_path), "Describe this image in detail")
+                keyframe_caption = cogvlm.push(sieve.Image(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
             captions[keyframe_path] = keyframe_caption
         
         captions_futures = list(captions.values())
@@ -113,7 +106,7 @@ def main(
         else:
             visual_summary = SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
         if spoken_context:
-            chunk_captions[i] = transcript_summary, visual_summary
+            chunk_captions[i] = chunk_transcript, visual_summary
         else:
             chunk_captions[i] = visual_summary
 
@@ -121,7 +114,7 @@ def main(
 
     chunk_summaries = []
 
-    print("Processing chunks...")
+    print("Understanding the visual content...")
 
     # Process each chunk in parallel
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -146,4 +139,4 @@ def main(
     return summary
 
 if __name__ == "__main__":
-    main.run(sieve.File(path="ltt_test.mp4"), conciseness="medium", visual_detail="medium", spoken_context=True)
+    main.run(sieve.File(path="tennis_test.mp4"), conciseness="concise", visual_detail="medium", spoken_context=True)

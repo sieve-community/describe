@@ -7,7 +7,7 @@ Models used:
 [Whisper](https://www.sievedata.com/functions/sieve/speech_transcriber) for transcriptions
 
 - [MoonDream](https://www.sievedata.com/functions/sieve/moondream) (Low Visual Detail but fastest)
-- [InternLM-X] (Medium Visual Detail and speed)
+- [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) (Medium Visual Detail and speed)
 - [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High Visual Detail but slowest)
 
 Summaries are generated using GPT3.5 and GPT4 by OpenAI - GPT3.5 is used to combine visual information across a single "chunk" (1 minute of content) as well as to generate a brief transcriptional summary of that chunk. Then, GPT4 is used to combine all of the information across the chunks to create the final summary
