@@ -3,8 +3,10 @@ import os
 from openai import OpenAI
 
 API_KEY = os.getenv("OPENAI_API_KEY")
+if API_KEY is None or API_KEY == "":
+    raise Exception("OPENAI_API_KEY environment variable not set")
 
-client = OpenAI()
+client = OpenAI(api_key=API_KEY)
 
 # Define the custom types for the LLM prompts
 class SummaryPrompt(BaseModel):
@@ -13,6 +15,7 @@ class SummaryPrompt(BaseModel):
 
     # Method to generate transcript summary
     def transcript_summary(self):
+        content = self.content
         detail = ""
         if self.level_of_detail == "concise":
             detail = "- The summary should be concise and easy to understand, and should not be longer than 100 words."
@@ -39,7 +42,7 @@ class SummaryPrompt(BaseModel):
     - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
     - Ensure you reply with the right content, and not anything to do with the prompt.
     {detail}
-    Transcript: {self.content}""",
+    Transcript: {content}""",
                 },
             ],
         )
@@ -47,6 +50,8 @@ class SummaryPrompt(BaseModel):
     
     # Method to generate video summary
     def video_summary(self):
+        content = self.content
+
         detail = ""
         if self.level_of_detail == "concise":
             detail = "- The summary should be concise and easy to understand, and should not be longer than 100 words."
@@ -75,7 +80,7 @@ class SummaryPrompt(BaseModel):
     - If any content is repeated across the captions, plese ensure that its importance is highlighted in the summary but not repeated too much.
     - Ignore information about filenames, etc.
     {detail}
-    Transcript: {self.content}""",
+    Transcript: {content}""",
                 },
             ],
         )
@@ -83,6 +88,8 @@ class SummaryPrompt(BaseModel):
     
     # Method to generate audiovisual summary
     def audiovisual_summary(self):
+        content = self.content
+
         detail = ""
         if self.level_of_detail == "concise":
             detail = "- The summary should be concise and easy to understand, and should not be longer than 100 words."
@@ -112,7 +119,7 @@ class SummaryPrompt(BaseModel):
     - Both the visual and transcriptional information is provided in order of how it appears in the video - please ensure that the summary reflects this order.
     - The summary should combine both the visual and audio information in a way that makes sense and is easy to understand.
     {detail}
-    Content: {self.content}""",
+    Content: {content}""",
                 },
             ],
         )

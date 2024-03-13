@@ -33,7 +33,7 @@ class VideoChunk(BaseModel):
     start_time: float
     end_time: float
     source_video_path: str
-    source_transcript: list
+    source_transcript: Optional[list]
 
     def compute_keyframes(self):
         cap = cv2.VideoCapture(self.source_video_path)
