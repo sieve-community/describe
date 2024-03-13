@@ -1,8 +1,7 @@
 import concurrent.futures
 import sieve
 import subprocess
-from custom_types import Video, VideoChunk
-from llm_prompts import SummaryPrompt
+
 import time
 
 metadata = sieve.Metadata(
@@ -39,6 +38,8 @@ def main(
     :param spoken_context: Whether to use the transcript when generating the final summary
     :return: The summarized content
     """
+    from custom_types import Video, VideoChunk
+    from llm_prompts import SummaryPrompt
     # Load the video
     start_time = time.time()
     video_path = video.path
@@ -111,7 +112,6 @@ def main(
             visual_summary = list(captions.values())
         else:
             visual_summary = SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
-
         if spoken_context:
             chunk_captions[i] = transcript_summary, visual_summary
         else:
