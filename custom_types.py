@@ -1,11 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 import cv2
-import subprocess
-import os
-import json
 from decord import VideoReader
-from decord import cpu
 
 # Define the custom types for Vidoe and its chunks
 class Video(BaseModel):
@@ -13,11 +9,10 @@ class Video(BaseModel):
     transcript: Optional[list] = Field(default_factory=list)
 
     def compute_duration(self):
-        cap = cv2.VideoCapture(self.path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        vr = VideoReader(self.path)
+        fps = vr.get_avg_fps()
+        frame_count = len(vr)
         duration = frame_count / fps
-        cap.release()
         return duration
     
     def extract_chunk_durations(self, chunk_size: int):
@@ -39,7 +34,7 @@ class VideoChunk(BaseModel):
 
     def compute_keyframes(self):
         cap = cv2.VideoCapture(self.source_video_path)
-        vr = VideoReader(self.source_video_path, ctx=cpu(0))
+        vr = VideoReader(self.source_video_path)
         fps = vr.get_avg_fps()
         total_frames = len(vr)
         source_video_duration = total_frames / fps

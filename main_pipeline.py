@@ -1,7 +1,5 @@
 import concurrent.futures
 import sieve
-import subprocess
-
 import time
 
 metadata = sieve.Metadata(
@@ -32,14 +30,15 @@ def main(
     spoken_context: bool = True,
 ):
     """
-    :param video: The video to be summarized
-    :param conciseness: The level of detail for the final summary. Pick from 'concise', 'medium', or 'detailed'
-    :param visual_detail: The level of visual detail for the final summary. Pick from 'low', 'medium', or 'high'
-    :param spoken_context: Whether to use the transcript when generating the final summary
-    :return: The summarized content
+    :param video: The video to be described
+    :param conciseness: The level of detail for the final description. Pick from 'concise', 'medium', or 'detailed'
+    :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', or 'high'
+    :param spoken_context: Whether to use the transcript when generating the final description
+    :return: The description
     """
     from custom_types import Video, VideoChunk
     from llm_prompts import SummaryPrompt
+
     # Load the video
     start_time = time.time()
     video_path = video.path
@@ -57,16 +56,14 @@ def main(
             for sublist in transcript
             for item in sublist
         ]
-
         video = Video(path=video_path, transcript=transcript)
-
     else:
         video = Video(path=video_path)
+    
     # Extract chunk durations
     chunk_size = 60
     chunk_durations = video.extract_chunk_durations(chunk_size)
 
-    # Prepare for parallel execution
     def process_chunk(chunk_data):
         i, (start, end) = chunk_data
         chunk = VideoChunk(
@@ -79,64 +76,36 @@ def main(
         keyframe_paths = chunk.compute_keyframes()
         chunk_transcript = chunk.compute_chunk_transcript()
 
-        chunk_captions = {}
+        detail_prompt = "Describe this image with just the most important details. Be concise."
+        model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
+        file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 
-        # Generate captions for each keyframe
-        captions = {}
+        captions = []
         for keyframe_path in keyframe_paths:
-            if visual_detail == "low":
-                keyframe_caption = moondream.push(sieve.File(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
-            if visual_detail == "medium":
-                keyframe_caption = internlm.push(sieve.File(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
-            if visual_detail == "high":
-                keyframe_caption = cogvlm.push(sieve.Image(path=keyframe_path), "Describe this image with just the most important details. Be concise.")
-            captions[keyframe_path] = keyframe_caption
+            model = model_mapping[visual_detail]
+            file_arg = file_type[visual_detail](path=keyframe_path)
+            keyframe_caption = model.push(file_arg, detail_prompt)
+            captions.append(keyframe_caption)
         
-        captions_futures = list(captions.values())
-        captions_list = []
-        for future in concurrent.futures.as_completed(captions_futures):
-            try:
-                result = future.result()
-                captions_list.append(result)
-            except Exception as exc:
-                print(f"Generated an exception: {exc}")
+        captions_futures = list(captions)
+        captions_list = [future.result() for future in captions_futures]
+        
+        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
 
-        if video.compute_duration() > 1200:
-            visual_summary = list(captions.values())
-        else:
-            visual_summary = SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
-        if spoken_context:
-            chunk_captions[i] = chunk_transcript, visual_summary
-        else:
-            chunk_captions[i] = visual_summary
-
-        return chunk_captions
-
-    chunk_summaries = []
+        return {i: (chunk_transcript, visual_summary) if spoken_context else visual_summary}
 
     print("Understanding the visual content...")
-
-    # Process each chunk in parallel
+    
+    chunk_summaries = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_chunk, (i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                result = future.result()
-                # Process the result if needed
-                chunk_summaries.append(result)
-            except Exception as exc:
-                print(f"Generated an exception: {exc}")
-
+        chunk_futures = [executor.submit(process_chunk, (i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
+    chunk_summaries = [future.result() for future in chunk_futures]
     # Sort the list by the chunk number so they're in order
     sorted_data = sorted(chunk_summaries, key=lambda x: next(iter(x)))
 
     print("Combining results...")
-
     # Combine the results into a single summary
     summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness).audiovisual_summary()
 
     print(f"Time taken: {time.time() - start_time}")
     return summary
-
-if __name__ == "__main__":
-    main.run(sieve.File(path="tennis_test.mp4"), conciseness="concise", visual_detail="medium", spoken_context=True)
