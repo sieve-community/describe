@@ -60,9 +60,9 @@ def main(
     else:
         video = Video(path=video_path)
     
-    # Extract chunk durations
-    chunk_size = 60
-    chunk_durations = video.extract_chunk_durations(chunk_size)
+    # the video is split into "chunks", and each chunk is processed in parallel
+    chunk_size = 60 # seconds
+    chunk_durations = video.extract_chunk_durations(chunk_size) # Extract the timestamps for each chunk
 
     def process_chunk(chunk_data):
         i, (start, end) = chunk_data
@@ -73,6 +73,9 @@ def main(
             source_video_path=video_path,
             source_transcript=transcript,
         )
+
+        # Keyframes are extracted from the chunk and used to generate a description
+        # Given the video's transcript, only the transcript present in the chunk is computed and used
         keyframe_paths = chunk.compute_keyframes()
         chunk_transcript = chunk.compute_chunk_transcript()
 
@@ -80,6 +83,7 @@ def main(
         model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
         file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 
+        # extract the captions for each keyframe
         captions = []
         for keyframe_path in keyframe_paths:
             model = model_mapping[visual_detail]
@@ -90,12 +94,14 @@ def main(
         captions_futures = list(captions)
         captions_list = [future.result() for future in captions_futures]
         
+        # Generate the visual summary
         visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
 
         return {i: (chunk_transcript, visual_summary) if spoken_context else visual_summary}
 
     print("Understanding the visual content...")
-    
+
+    # Process each chunk in parallel
     chunk_summaries = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
         chunk_futures = [executor.submit(process_chunk, (i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
@@ -109,3 +115,6 @@ def main(
 
     print(f"Time taken: {time.time() - start_time}")
     return summary
+
+if __name__ == "__main__":
+    main.run(video=sieve.File(path="test.mp4"))
