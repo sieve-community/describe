@@ -3,21 +3,24 @@ from typing import Optional
 import cv2
 from decord import VideoReader
 
-# Define the custom types for Vidoe and its chunks
 class Video(BaseModel):
     path: str
     transcript: Optional[list] = Field(default_factory=list)
 
-    # Method to compute the duration of the video
     def compute_duration(self):
+        '''
+        Calculate the duration of the video in seconds
+        '''
         vr = VideoReader(self.path)
         fps = vr.get_avg_fps()
         frame_count = len(vr)
         duration = frame_count / fps
         return duration
     
-    # Method to extract chunk durations
     def extract_chunk_durations(self, chunk_size: int):
+        '''
+        Extract the timestamps for each chunk based on the chunk size in seconds
+        '''
         duration = self.compute_duration()
         chunks = []
         current_start = 0
@@ -34,28 +37,26 @@ class VideoChunk(BaseModel):
     source_video_path: str
     source_transcript: Optional[list]
 
-    # Method to compute keyframes based on duration
     def compute_keyframes(self):
-        cap = cv2.VideoCapture(self.source_video_path)
+        '''
+        Extract keyframes from the chunk
+        '''
         vr = VideoReader(self.source_video_path)
         fps = vr.get_avg_fps()
         total_frames = len(vr)
         source_video_duration = total_frames / fps
         duration = self.end_time - self.start_time
 
-        # Adjust frame_numbers based on source video duration
-        if source_video_duration > 1200:  # If duration > 20 minutes, extract middle frame of the chunk
+        # If duration > 20 minutes, use the middle frame of the chunk as the keyframe
+        if source_video_duration > 1200:  
             frame_numbers = [int((self.start_time + duration / 2) * fps)]
-        elif source_video_duration > 300 or source_video_duration < 60:  # If duration > 5 minutes, extract 1st and 3rd quarter frames of the chunk
+        # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
+        else:
             frame_numbers = [
                 int((self.start_time + (duration / 4) * i) * fps) for i in [1, 3]
             ]
-        else:
-            # If duration <= 5 minutes, extract 1st, 2nd, and 3rd quarter frames of the chunk
-            frame_numbers = [
-                int((self.start_time + (duration / 4) * i) * fps) for i in range(1, 4)
-            ]
-
+        
+        # store the keyframes as images
         keyframe_paths = []
         for i, frame_number in enumerate(frame_numbers, start=1):
             vr.seek(frame_number)
@@ -65,7 +66,6 @@ class VideoChunk(BaseModel):
             cv2.imwrite(f"{self.chunk_number}_{i}.jpg", frame)
             keyframe_paths.append(f"{self.chunk_number}_{i}.jpg")
         
-        cap.release()
         return keyframe_paths
 
     def compute_chunk_transcript(self):

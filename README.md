@@ -1,16 +1,17 @@
 # Describe
 
-Describe is an app that uses the powers of VLMs and LLMs to generate customizable audiovisual descriptions of videos
+Describe is an app that generates customizable audiovisual descriptions of videos. It uses a combination of visual language models (VLMs) and language models (LMs) to generate a summary of the video content. The app is designed to be highly customizable, allowing users to control the level of visual detail, conciseness, and the influence of spoken context on the final summary.
 
-Models used:
+Functions used:
 
-[Whisper](https://www.sievedata.com/functions/sieve/speech_transcriber) for transcriptions
+- [Speech Transcriber](https://www.sievedata.com/functions/sieve/speech_transcriber) for transcriptions
+- [MoonDream](https://www.sievedata.com/functions/sieve/moondream) (Low visual detail but fastest)
+- [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) (Medium visual detail and speed)
+- [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High visual detail but slowest)
 
-- [MoonDream](https://www.sievedata.com/functions/sieve/moondream) (Low Visual Detail but fastest)
-- [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) (Medium Visual Detail and speed)
-- [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High Visual Detail but slowest)
+Summaries are generated using GPT-3.5 and GPT-4 by OpenAI. GPT-3.5 is used to combine visual information across a single "chunk" (1 minute of content) as well as to generate a brief transcriptional summary of that chunk. Then, GPT-4 is used to combine all of the information across the chunks to create the final summary.
 
-Summaries are generated using GPT3.5 and GPT4 by OpenAI - GPT3.5 is used to combine visual information across a single "chunk" (1 minute of content) as well as to generate a brief transcriptional summary of that chunk. Then, GPT4 is used to combine all of the information across the chunks to create the final summary
+In order to use the app in your account, you will need to add an `OPENAI_API_KEY` secret in your Sieve account [settings](https://www.sievedata.com/dashboard/settings/secrets).
 
 ## Presets and their influence
 
@@ -34,7 +35,7 @@ This preset influences how verbose or concise the final summary should be by pro
 - `medium` mode tries to keep the summary to ~250 words
 - `detailed` mode tries to keep the summary to at most ~500 words and is the most verbose
 
-The default is  `medium`.
+The default is  `concise`.
 
 ### Spoken Context
 
