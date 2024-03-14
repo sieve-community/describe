@@ -8,6 +8,7 @@ class Video(BaseModel):
     path: str
     transcript: Optional[list] = Field(default_factory=list)
 
+    # Method to compute the duration of the video
     def compute_duration(self):
         vr = VideoReader(self.path)
         fps = vr.get_avg_fps()
@@ -15,6 +16,7 @@ class Video(BaseModel):
         duration = frame_count / fps
         return duration
     
+    # Method to extract chunk durations
     def extract_chunk_durations(self, chunk_size: int):
         duration = self.compute_duration()
         chunks = []
@@ -32,6 +34,7 @@ class VideoChunk(BaseModel):
     source_video_path: str
     source_transcript: Optional[list]
 
+    # Method to compute keyframes based on duration
     def compute_keyframes(self):
         cap = cv2.VideoCapture(self.source_video_path)
         vr = VideoReader(self.source_video_path)
