@@ -2,13 +2,6 @@ from pydantic import BaseModel, Field
 import os
 from openai import OpenAI
 
-# Ensure the API key is set
-API_KEY = os.getenv("OPENAI_API_KEY")
-if not API_KEY:
-    raise Exception("OPENAI_API_KEY environment variable not set")
-
-client = OpenAI(api_key=API_KEY)
-
 class SummaryPrompt(BaseModel):
     content: list = Field(..., description="The content to be summarized")
     level_of_detail: str = Field("concise", description="The level of detail for the summary")
@@ -20,6 +13,12 @@ class SummaryPrompt(BaseModel):
             "detailed": "- The summary should be comprehensive and easy to understand, and should not be longer than 500 words."
         }
         detail = detail_map.get(self.level_of_detail, "")
+        # Ensure the API key is set
+        API_KEY = os.getenv("OPENAI_API_KEY")
+        if not API_KEY:
+            raise Exception("OPENAI_API_KEY environment variable not set")
+
+        client = OpenAI(api_key=API_KEY)
         
         completion = client.chat.completions.create(
             model=model,
