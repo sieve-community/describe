@@ -4,7 +4,11 @@ Describe is an app that generates customizable audiovisual descriptions of video
 
 ## Quick Demo
 
-To run this on your own videos quickly, check out the app on Sieve [here](https://www.sievedata.com/functions/sieve/describe).
+To run this on your own videos quickly, check out the app on Sieve [here](https://www.sievedata.com/functions/sieve/describe). Below is a quick example output of an interview with Boris Johnson:
+
+> In this video, a blonde man in a blue Xchanging shirt, accompanied by another person in similar attire, engages with the press outdoors. As the reporters incessantly question him about his regrets regarding earlier comments, he deflects by offering tea, emphasizing the gesture's humanitarian nature and expressing sympathy for the reporters' long wait. Despite repeated inquiries, he maintains a polite demeanor, focusing on the act of offering tea rather than providing direct answers. The visual content captures this exchange against an outdoor backdrop, highlighting the interaction's dynamic and the man's approach in handling the situation.
+
+[![Example](https://storage.googleapis.com/sieve-public-data/boris-preview.png)](https://www.sievedata.com/functions/sieve/describe)
 
 Note: This app uses functions that run on the [Sieve](https://www.sievedata.com) platform. You will need a Sieve account to use this. However, all the logic is open-source and pretty simple to replicate in your own environment as well. The functions used are:
 
