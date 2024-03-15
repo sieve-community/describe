@@ -46,13 +46,8 @@ def main(
     start_time = time.time()
     video_path = video.path
 
-    # check if video has audio using ffmpeg
-    import subprocess
-    command = f"ffprobe -i {video_path} -show_streams -select_streams a -loglevel error"
-    has_audio = subprocess.run(command, shell=True, capture_output=True).returncode == 0
-
     # Transcribe the audio
-    if spoken_context and has_audio:
+    if spoken_context:
         print("Transcribing audio...")
         transcript = []
         for transcript_chunk in whisper.run(sieve.File(path=video_path)):
