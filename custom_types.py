@@ -59,8 +59,7 @@ class VideoChunk(BaseModel):
         # store the keyframes as images
         keyframe_paths = []
         for i, frame_number in enumerate(frame_numbers, start=1):
-            vr.seek(frame_number)
-            frame = vr.next().asnumpy()
+            frame = vr[frame_number].asnumpy()
             # Save the keyframe as an image after doing BGR to RGB conversion
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             cv2.imwrite(f"{self.chunk_number}_{i}.jpg", frame)

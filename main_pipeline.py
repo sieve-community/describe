@@ -46,9 +46,14 @@ def main(
     start_time = time.time()
     video_path = video.path
 
+    # check if video has audio using ffmpeg
+    import subprocess
+    command = f"ffprobe -i {video_path} -show_streams -select_streams a -loglevel error"
+    has_audio = subprocess.run(command, shell=True, capture_output=True).returncode == 0
+
     # Transcribe the audio
-    print("Transcribing audio...")
-    if spoken_context:
+    if spoken_context and has_audio:
+        print("Transcribing audio...")
         transcript = []
         for transcript_chunk in whisper.run(sieve.File(path=video_path)):
             transcript.append(transcript_chunk)
@@ -62,6 +67,7 @@ def main(
         video = Video(path=video_path, transcript=transcript)
     else:
         video = Video(path=video_path)
+        transcript = []
     
     # the video is split into "chunks", and each chunk is processed in parallel
     chunk_size = 60 # seconds
@@ -120,4 +126,4 @@ def main(
     return summary
 
 if __name__ == "__main__":
-    main.run(video=sieve.File(path="test.mp4"))
+    main(video=sieve.File(url="https://storage.googleapis.com/sieve-prod-us-central1-public-file-upload-bucket/c4d968f5-f25a-412b-9102-5b6ab6dafcb4/ededa101-a156-40a6-b670-4567b9b3c372-AnimateDiff_00057.mp4"))
