@@ -7,7 +7,7 @@ metadata = sieve.Metadata(
     description="Generate a description of a video using both audio and visual context.",
     image=sieve.Image(url="https://storage.googleapis.com/sieve-public-data/describe.webp"),
     code_url="https://github.com/sieve-community/describe",
-    tags=["Video", "Showcase"],
+    tags=["Video", "Featured"],
     readme=open("README.md", "r").read(),
 )
 
