@@ -39,7 +39,6 @@ class SummaryPrompt(BaseModel):
         prompt_description = """
         Can you provide a comprehensive summary of the given transcript? Please meet the following constraints:
         - The summary should cover all the key points and main ideas presented in the original text
-        - The summary should be something that may follow the phrase "In this video..."
         - The summary should condense the information into a concise and easy-to-understand format
         - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
         - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
@@ -51,7 +50,6 @@ class SummaryPrompt(BaseModel):
         prompt_description = """
         Can you provide a comprehensive summary of the given visual captions of frames of a video? Please meet the following constraints:
         - The summary should cover all the key visual elements and main ideas presented in the original video
-        - The summary should be something that may follow the phrase "In this video..."
         - The summary should condense the information into a concise and easy-to-understand format
         - Please ensure that the summary includes relevant details and visual information while avoiding any unnecessary information or repetition.
         - The length of the summary should be appropriate for the length and complexity of the original captions, providing a clear and accurate overview without omitting any important information.
@@ -64,7 +62,6 @@ class SummaryPrompt(BaseModel):
         prompt_description = """
         Provide a comprehensive summary of the given visual descriptions and audio transcripts of a video. Please meet the following constraints:
         - The summary should cover all the key visual elements, main ideas, and audio content presented in the original video
-        - The summary should be something that may follow the phrase "In this video..."
         - The summary should condense the information into a concise and easy-to-understand format
         - Please ensure that the summary includes relevant details and visual information while avoiding any unnecessary information or repetition.
         - The length of the summary should be appropriate for the length and complexity of the original captions, providing a clear and accurate overview without omitting any important information.
@@ -73,5 +70,6 @@ class SummaryPrompt(BaseModel):
         - The summary should combine both the visual and audio information in a way that makes sense and is easy to understand.
         - Ensure you reply with the right content, and not anything to do with these instructions.
         - Ensure you always include some level of detail about the visual content.
+        - Just provide a description instead of saying "this video" or "this description".
         """
         return self._generate_summary("gpt-4-turbo-preview", prompt_description)
