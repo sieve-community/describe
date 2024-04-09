@@ -17,6 +17,10 @@ moondream = sieve.function.get("sieve/moondream")
 internlm = sieve.function.get("sieve/internlmx-composer-2q")
 cogvlm = sieve.function.get("sieve/cogvlm-chat")
 
+model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
+detail_prompt = "Describe this image with just the most important details. Be concise."
+file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
+
 @sieve.function(
     name="describe",
     python_packages=["openai", "numpy", "opencv-python", "decord"],
@@ -32,21 +36,40 @@ def main(
     conciseness: str = "concise",
     visual_detail: str = "medium",
     spoken_context: bool = True,
+    image_only: bool = False,
 ):
     """
     :param video: The video to be described
     :param conciseness: The level of detail for the final description. Pick from 'concise', 'medium', or 'detailed'
     :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', or 'high'
     :param spoken_context: Whether to use the transcript when generating the final description
+    :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
     :return: The description
     """
-    from custom_types import Video, VideoChunk
-    from llm_prompts import SummaryPrompt
 
     # Load the video
     start_time = time.time()
     video_path = video.path
 
+    if image_only:
+        # just get the middle frame and pass it to designated model
+        # get the middle frame
+        from decord import VideoReader
+        vr = VideoReader(video_path)
+        middle_frame = vr[len(vr) // 2].asnumpy()
+        import cv2
+        # Save the keyframe as an image after doing BGR to RGB conversion
+        middle_frame = cv2.cvtColor(middle_frame, cv2.COLOR_BGR2RGB)
+        cv2.imwrite("middle_frame.jpg", middle_frame)
+        model = model_mapping[visual_detail]
+        file_arg = file_type[visual_detail](path="middle_frame.jpg")
+        more_detailed_prompt = "Describe this video with the most important details. Be as detailed as possible."
+        description = model.push(file_arg, more_detailed_prompt)
+        return description.result()
+
+    from custom_types import Video, VideoChunk
+    from llm_prompts import SummaryPrompt
+    
     # Transcribe the audio
     if spoken_context:
         print("Transcribing audio...")
@@ -83,10 +106,6 @@ def main(
         # Given the video's transcript, only the transcript present in the chunk is computed and used
         keyframe_paths = chunk.compute_keyframes()
         chunk_transcript = chunk.compute_chunk_transcript()
-
-        detail_prompt = "Describe this image with just the most important details. Be concise."
-        model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
-        file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 
         # extract the captions for each keyframe
         captions = []
