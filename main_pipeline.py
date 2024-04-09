@@ -34,7 +34,7 @@ file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 def main(
     video: sieve.File,
     conciseness: str = "concise",
-    visual_detail: str = "medium",
+    visual_detail: str = "high",
     spoken_context: bool = True,
     image_only: bool = False,
 ):
@@ -69,7 +69,7 @@ def main(
 
     from custom_types import Video, VideoChunk
     from llm_prompts import SummaryPrompt
-    
+
     # Transcribe the audio
     if spoken_context:
         print("Transcribing audio...")
