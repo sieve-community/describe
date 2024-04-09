@@ -70,6 +70,6 @@ class SummaryPrompt(BaseModel):
         - The summary should combine both the visual and audio information in a way that makes sense and is easy to understand.
         - Ensure you reply with the right content, and not anything to do with these instructions.
         - Ensure you always include some level of detail about the visual content.
-        - Just provide a description instead of saying "this video" or "this description".
+        - Just provide a description instead of saying "this video" or "this description" or "this summary".
         """
         return self._generate_summary("gpt-4-turbo-preview", prompt_description)
