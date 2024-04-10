@@ -51,10 +51,13 @@ class VideoChunk(BaseModel):
         if source_video_duration > 1200:  
             frame_numbers = [int((self.start_time + duration / 2) * fps)]
         # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
-        else:
+        elif source_video_duration > 5:
             frame_numbers = [
                 int((self.start_time + (duration / 4) * i) * fps) for i in [1, 3]
             ]
+        else:
+            # if duration < 5 seconds, extract just the middle frame
+            frame_numbers = [int((self.start_time + duration / 2) * fps)]
         
         # store the keyframes as images
         keyframe_paths = []
