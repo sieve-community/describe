@@ -18,7 +18,6 @@ internlm = sieve.function.get("sieve/internlmx-composer-2q")
 cogvlm = sieve.function.get("sieve/cogvlm-chat")
 
 model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
-detail_prompt = "Describe this image with just the most important details. Be concise."
 file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 
 @sieve.function(
@@ -37,6 +36,7 @@ def main(
     visual_detail: str = "high",
     spoken_context: bool = True,
     image_only: bool = False,
+    additional_instructions: str = ""
 ):
     """
     :param video: The video to be described
@@ -44,8 +44,13 @@ def main(
     :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', or 'high'
     :param spoken_context: Whether to use the transcript when generating the final description
     :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
+    :param additional_instructions: Any additional instructions on the questions to answer or the details to emphasize in the final description
     :return: The description
     """
+
+    detail_prompt = "Describe this image with just the most important details. Be concise."
+    if additional_instructions:
+        detail_prompt = f"Describe this image with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
 
     # Load the video
     start_time = time.time()
@@ -119,7 +124,7 @@ def main(
         captions_list = [future.result() for future in captions_futures]
         
         # Generate the visual summary
-        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness).video_summary()
+        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness, custom_detail=additional_instructions).video_summary()
 
         return {i: (chunk_transcript, visual_summary) if spoken_context else visual_summary}
 
@@ -135,7 +140,7 @@ def main(
 
     print("Combining results...")
     # Combine the results into a single summary
-    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness).audiovisual_summary()
+    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness, custom_detail=additional_instructions).audiovisual_summary()
 
     print(f"Time taken: {time.time() - start_time}")
     return summary

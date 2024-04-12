@@ -5,6 +5,7 @@ from openai import OpenAI
 class SummaryPrompt(BaseModel):
     content: list = Field(..., description="The content to be summarized")
     level_of_detail: str = Field("concise", description="The level of detail for the summary")
+    custom_detail: str = Field("", description="Any custom instructions for the summary")
 
     def _generate_summary(self, model: str, prompt_description: str) -> str:
         detail_map = {
@@ -36,14 +37,14 @@ class SummaryPrompt(BaseModel):
         return completion.choices[0].message.content
 
     def transcript_summary(self) -> str:
-        prompt_description = """
-        Can you provide a comprehensive summary of the given transcript? Please meet the following constraints:
+        prompt_description = """Can you provide a comprehensive summary of the given transcript? Please meet the following constraints:
         - The summary should cover all the key points and main ideas presented in the original text
         - The summary should condense the information into a concise and easy-to-understand format
         - Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition.
         - The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.
-        - Ensure you reply with the right content, and not anything to do with the prompt.
-        """
+        - Ensure you reply with the right content, and not anything to do with the prompt."""
+        if self.custom_detail:
+            prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
         return self._generate_summary("gpt-3.5-turbo", prompt_description)
 
     def video_summary(self) -> str:
@@ -56,6 +57,8 @@ class SummaryPrompt(BaseModel):
         - Ensure you reply with the right content, and not anything to do with the prompt.
         - If any content is repeated across the captions, plese ensure that its importance is highlighted in the summary but not repeated too much.
         - Ignore information about filenames, etc."""
+        if self.custom_detail:
+            prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
         return self._generate_summary("gpt-3.5-turbo", prompt_description)
 
     def audiovisual_summary(self) -> str:
@@ -72,4 +75,6 @@ class SummaryPrompt(BaseModel):
         - Ensure you always include some level of detail about the visual content.
         - Do not say "This video", "This description", "This scene", or "This summary" in the summary. Just provide the description itself.
         """
+        if self.custom_detail:
+            prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
         return self._generate_summary("gpt-4-turbo-preview", prompt_description)
