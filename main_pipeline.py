@@ -51,9 +51,9 @@ def main(
     :return: The description
     """
 
-    detail_prompt = "Describe this video with just the most important details. Be concise."
+    detail_prompt = "Describe this image with just the most important details. Be concise."
     if additional_instructions:
-        detail_prompt = f"Describe this video with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
+        detail_prompt = f"Describe this image with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
 
     # Load the video
     start_time = time.time()
@@ -71,7 +71,7 @@ def main(
         cv2.imwrite("middle_frame.jpg", middle_frame)
         model = model_mapping[visual_detail]
         file_arg = file_type[visual_detail](path="middle_frame.jpg")
-        more_detailed_prompt = "Describe this video with the most important details. Be as detailed as possible."
+        more_detailed_prompt = "Describe this image with the most important details. Be as detailed as possible."
         description = model.push(file_arg, more_detailed_prompt)
         return description.result()
 
