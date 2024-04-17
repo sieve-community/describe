@@ -51,9 +51,9 @@ def main(
     :return: The description
     """
 
-    detail_prompt = "Describe this image with just the most important details. Be concise."
+    detail_prompt = "Caption this scene in vivid detail. Short sentences."
     if additional_instructions:
-        detail_prompt = f"Describe this image with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
+        detail_prompt = f"Caption the following about this scene in vivid detail. Short sentences: {additional_instructions}"
 
     # Load the video
     start_time = time.time()
@@ -71,49 +71,35 @@ def main(
         cv2.imwrite("middle_frame.jpg", middle_frame)
         model = model_mapping[visual_detail]
         file_arg = file_type[visual_detail](path="middle_frame.jpg")
-        more_detailed_prompt = "Describe this image with the most important details. Be as detailed as possible."
+        more_detailed_prompt = "Caption this scene with the most important details. Be as detailed as possible."
         description = model.push(file_arg, more_detailed_prompt)
         return description.result()
 
     from custom_types import Video, VideoChunk
     from llm_prompts import SummaryPrompt
-
-    # Transcribe the audio
-    if spoken_context:
-        print("Transcribing audio...")
-        transcript = []
-        for transcript_chunk in whisper.run(sieve.File(path=video_path)):
-            transcript.append(transcript_chunk)
-        transcript = [segment["segments"] for segment in transcript]
-        # Extract only the start, end, and text for each segment, excluding the "words" part
-        transcript = [
-            {"start": item["start"], "end": item["end"], "text": item["text"]}
-            for sublist in transcript
-            for item in sublist
-        ]
-        video = Video(path=video_path, transcript=transcript)
-    else:
-        video = Video(path=video_path)
-        transcript = []
     
+    print("Transcribing audio...")
+    transcription_job = whisper.push(video)
+    video = Video(path=video_path)
     # the video is split into "chunks", and each chunk is processed in parallel
     chunk_size = 60 # seconds
     chunk_durations = video.extract_chunk_durations(chunk_size) # Extract the timestamps for each chunk
 
-    def process_chunk(chunk_data):
+    def create_chunk(chunk_data, source_transcript=None):
         i, (start, end) = chunk_data
         chunk = VideoChunk(
             chunk_number=i,
             start_time=start,
             end_time=end,
             source_video_path=video_path,
-            source_transcript=transcript,
+            source_transcript=source_transcript,
         )
+        return chunk
 
+    def process_chunk(chunk):
         # Keyframes are extracted from the chunk and used to generate a description
         # Given the video's transcript, only the transcript present in the chunk is computed and used
         keyframe_paths = chunk.compute_keyframes()
-        chunk_transcript = chunk.compute_chunk_transcript()
 
         # extract the captions for each keyframe
         captions = []
@@ -129,15 +115,46 @@ def main(
         # Generate the visual summary
         visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness, custom_detail=additional_instructions, llm_backend=llm_backend).video_summary()
 
-        return {i: (chunk_transcript, visual_summary) if spoken_context else visual_summary}
+        return {chunk.chunk_number: visual_summary}
 
     print("Understanding the visual content...")
-
     # Process each chunk in parallel
     chunk_summaries = []
+    chunks = [create_chunk((i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        chunk_futures = [executor.submit(process_chunk, (i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
+        chunk_futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+    
+    # Transcribe the audio
+    if spoken_context:
+        transcript = []
+        for transcript_chunk in transcription_job.result():
+            if transcript_chunk["text"] == "":
+                continue
+            transcript.append(transcript_chunk)
+        transcript = [segment["segments"] for segment in transcript]
+        # Extract only the start, end, and text for each segment, excluding the "words" part
+        transcript = [
+            {"start": item["start"], "end": item["end"], "text": item["text"]}
+            for sublist in transcript
+            for item in sublist
+        ]
+        video = Video(path=video_path, transcript=transcript)
+    else:
+        video = Video(path=video_path)
+        transcript = []
+
+    chunks = [create_chunk((i, duration), transcript) for i, duration in enumerate(chunk_durations, start=1)]
     chunk_summaries = [future.result() for future in chunk_futures]
+
+    # If spoken context is enabled, combine the visual and audio summaries
+    if spoken_context:
+        new_chunk_summaries = []
+        for chunk_summary, chunk in zip(chunk_summaries, chunks):
+            keys = chunk_summary.keys()
+            first_key = next(iter(keys))
+            new_chunk_summaries.append({first_key: (chunk.compute_chunk_transcript(), chunk_summary[first_key])})
+        chunk_summaries = new_chunk_summaries
+    
     # Sort the list by the chunk number so they're in order
     sorted_data = sorted(chunk_summaries, key=lambda x: next(iter(x)))
 
@@ -149,4 +166,7 @@ def main(
     return summary
 
 if __name__ == "__main__":
-    main(video=sieve.File(url="https://storage.googleapis.com/sieve-prod-us-central1-public-file-upload-bucket/c4d968f5-f25a-412b-9102-5b6ab6dafcb4/ededa101-a156-40a6-b670-4567b9b3c372-AnimateDiff_00057.mp4"))
+    describe = sieve.function.get("sieve-internal/describe")
+    import os
+    for file in os.listdir("tests"):
+        print(describe.push(video=sieve.File(path=f"tests/{file}", llm_backend="mixtral")))
