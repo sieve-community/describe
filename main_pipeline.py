@@ -27,7 +27,8 @@ file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
     python_version="3.10",
     metadata=metadata,
     environment_variables=[
-        sieve.Env(name="OPENAI_API_KEY", description="OpenAI API Key")
+        sieve.Env(name="OPENAI_API_KEY", description="OpenAI API Key", default=""),
+        sieve.Env(name="TOGETHERAI_API_KEY", description="Together API Key", default=""),
     ],
 )
 def main(
@@ -36,7 +37,8 @@ def main(
     visual_detail: str = "high",
     spoken_context: bool = True,
     image_only: bool = False,
-    additional_instructions: str = ""
+    additional_instructions: str = "",
+    llm_backend: str = "openai",
 ):
     """
     :param video: The video to be described
@@ -45,12 +47,13 @@ def main(
     :param spoken_context: Whether to use the transcript when generating the final description
     :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
     :param additional_instructions: Any additional instructions on the questions to answer or the details to emphasize in the final description
+    :param llm_backend: The backend to use for the LLM model. Pick from 'openai' or 'mixtral'. Requires 3rd party API keys. See the README for more information.
     :return: The description
     """
 
-    detail_prompt = "Describe this image with just the most important details. Be concise."
+    detail_prompt = "Describe this video with just the most important details. Be concise."
     if additional_instructions:
-        detail_prompt = f"Describe this image with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
+        detail_prompt = f"Describe this video with just the details about the following: {additional_instructions}. Be descriptive, but only about the requested details."
 
     # Load the video
     start_time = time.time()
@@ -124,7 +127,7 @@ def main(
         captions_list = [future.result() for future in captions_futures]
         
         # Generate the visual summary
-        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness, custom_detail=additional_instructions).video_summary()
+        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness, custom_detail=additional_instructions, llm_backend=llm_backend).video_summary()
 
         return {i: (chunk_transcript, visual_summary) if spoken_context else visual_summary}
 
@@ -140,7 +143,7 @@ def main(
 
     print("Combining results...")
     # Combine the results into a single summary
-    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness, custom_detail=additional_instructions).audiovisual_summary()
+    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness, custom_detail=additional_instructions, llm_backend=llm_backend).audiovisual_summary()
 
     print(f"Time taken: {time.time() - start_time}")
     return summary

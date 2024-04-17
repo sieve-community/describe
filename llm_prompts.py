@@ -6,6 +6,7 @@ class SummaryPrompt(BaseModel):
     content: list = Field(..., description="The content to be summarized")
     level_of_detail: str = Field("concise", description="The level of detail for the summary")
     custom_detail: str = Field("", description="Any custom instructions for the summary")
+    llm_backend: str = Field("openai", description="The LLM backend to use for the summary")
 
     def _generate_summary(self, model: str, prompt_description: str) -> str:
         detail_map = {
@@ -15,11 +16,17 @@ class SummaryPrompt(BaseModel):
         }
         detail = detail_map.get(self.level_of_detail, "")
         # Ensure the API key is set
-        API_KEY = os.getenv("OPENAI_API_KEY")
-        if not API_KEY:
-            raise Exception("OPENAI_API_KEY environment variable not set")
+        if self.llm_backend == "mixtral":
+            API_KEY = os.getenv("TOGETHERAI_API_KEY")
+        else:
+            API_KEY = os.getenv("OPENAI_API_KEY")
+        if not API_KEY or API_KEY == "":
+            raise Exception("OPENAI_API_KEY or TOGETHERAI_API_KEY environment variable not set")
 
-        client = OpenAI(api_key=API_KEY)
+        if self.llm_backend == "mixtral":
+            client = OpenAI(api_key=API_KEY, base_url="https://api.together.xyz/v1")
+        else:
+            client = OpenAI(api_key=API_KEY)
         
         completion = client.chat.completions.create(
             model=model,
@@ -45,7 +52,7 @@ class SummaryPrompt(BaseModel):
         - Ensure you reply with the right content, and not anything to do with the prompt."""
         if self.custom_detail:
             prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
-        return self._generate_summary("gpt-3.5-turbo", prompt_description)
+        return self._generate_summary("gpt-3.5-turbo" if self.llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1", prompt_description)
 
     def video_summary(self) -> str:
         prompt_description = """
@@ -59,7 +66,7 @@ class SummaryPrompt(BaseModel):
         - Ignore information about filenames, etc."""
         if self.custom_detail:
             prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
-        return self._generate_summary("gpt-3.5-turbo", prompt_description)
+        return self._generate_summary("gpt-3.5-turbo" if self.llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1", prompt_description)
 
     def audiovisual_summary(self) -> str:
         prompt_description = """
@@ -77,4 +84,4 @@ class SummaryPrompt(BaseModel):
         """
         if self.custom_detail:
             prompt_description += f"{prompt_description}\n- A user also requested the following instructions or details to be emphasized: {self.custom_detail}"
-        return self._generate_summary("gpt-4-turbo-preview", prompt_description)
+        return self._generate_summary("gpt-4-turbo-preview" if self.llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1", prompt_description)
