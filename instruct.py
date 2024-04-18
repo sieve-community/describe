@@ -36,7 +36,7 @@ def get_summary(context: VideoContext, conciseness: str = "concise", llm_backend
     detail_map = {
         "concise": "The summary should be concise and easy to understand, and should not be longer than 100 words.",
         "medium": "The summary should be easy to understand, and should not be longer than 250 words.",
-        "detailed": "The summary should be comprehensive and easy to understand, and should not be longer than 500 words."
+        "detailed": "The summary should be detailed, comprehensive and easy to understand, and should not be longer than 500 words."
     }
 
     SYSTEM_PROMPT = f'''

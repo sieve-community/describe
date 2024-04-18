@@ -173,7 +173,7 @@ def main(
     # split the context into chunks of 60 seconds
     split_context = {}
     for item in context.context_list:
-        chunk_number = int(item.start_time // (chunk_size ))
+        chunk_number = int(item.start_time // (chunk_size))
         if chunk_number not in split_context:
             split_context[chunk_number] = []
         split_context[chunk_number].append(item)
@@ -184,6 +184,9 @@ def main(
         chunk_number, chunk = chunk_data
         if len(chunk) == 1:
             new_additional_instructions = f"{additional_instructions}. Preserve as much detail as possible from the original context."
+            # no need to generate a summary for a single context item that is a visual caption
+            if chunk[0].type == "visual caption":
+                return chunk_number, chunk[0].content
         else:
             new_additional_instructions = additional_instructions
         return chunk_number, get_summary(VideoContext(context_list=chunk), conciseness, llm_backend=llm_backend, additional_instructions=new_additional_instructions).summary
