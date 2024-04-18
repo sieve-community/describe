@@ -41,9 +41,9 @@ The default is `medium`.
 
 This preset influences how verbose or concise the final summary should be by prompting GPT3.5 and GPT4 with constraints on things like length and finer detail.
 
-- `concise` mode tries to keep the summary to ~100 words and is the slimmest in terms of the output
-- `medium` mode tries to keep the summary to ~250 words
-- `detailed` mode tries to keep the summary to at most ~500 words and is the most verbose
+- `concise` mode tries to keep the summary to 4 sentences and is the slimmest in terms of the output
+- `medium` mode tries to keep the summary to 8 sentences
+- `detailed` mode tries to keep the summary to at most 12 sentences and is the most verbose
 
 The default is  `concise`.
 
