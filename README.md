@@ -17,8 +17,8 @@ Note: This app uses functions that run on the [Sieve](https://www.sievedata.com)
 - [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) (Medium visual detail and speed)
 - [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High visual detail but slowest)
 
-Summaries are generated using an LLM backend with two options: `openai` and `mixtral`.
-- If `openai` is selected, we use GPT-3.5 and GPT-4 by OpenAI. GPT-3.5 is used to combine visual information across a single "chunk" (1 minute of content) as well as to generate a brief transcriptional summary of that chunk. Then, GPT-4 is used to combine all of the information across the chunks to create the final summary.
+Summaries are generated using an LLM backend that combines various pieces of context. We have two options for this: `openai` and `mixtral`.
+- If `openai` is selected, we use GPT-4 by OpenAI.
 - If `mixtral` is selected, we use the `mistralai/Mixtral-8x7B-Instruct-v0.1` model hosted on Together AI.
 
 In order to use the app in your account, you will need to add an `OPENAI_API_KEY` or a `TOGETHERAI_API_KEY` secret in your Sieve account [settings](https://www.sievedata.com/dashboard/settings/secrets) and specify the backend accordingly.

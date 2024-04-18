@@ -1,6 +1,4 @@
-import concurrent.futures
 import sieve
-import time
 
 metadata = sieve.Metadata(
     title="Generate a Video Description",
@@ -10,6 +8,33 @@ metadata = sieve.Metadata(
     tags=["Video", "Featured"],
     readme=open("README.md", "r").read(),
 )
+
+def get_video_info(video_path):
+    '''
+    Calculate the info of the video
+    '''
+    from decord import VideoReader
+    vr = VideoReader(video_path)
+    fps = vr.get_avg_fps()
+    frame_count = len(vr)
+    duration = frame_count / fps
+    return vr, duration, fps
+
+def calculate_keyframes(video_duration, frame_rate, start_time, end_time):
+    chunk_duration = end_time - start_time
+    # If duration > 20 minutes, use the middle frame of the chunk as the keyframe
+    if video_duration > 1200:  
+        frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
+    # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
+    elif video_duration > 5:
+        frame_numbers = [
+            int((start_time + (chunk_duration / 4) * i) * frame_rate) for i in [1, 3]
+        ]
+    else:
+        # if duration < 5 seconds, extract just the middle frame
+        frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
+
+    return frame_numbers
 
 # Sieve functions
 whisper = sieve.function.get("sieve/speech_transcriber")
@@ -22,7 +47,7 @@ file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
 
 @sieve.function(
     name="describe",
-    python_packages=["openai", "numpy", "opencv-python", "decord"],
+    python_packages=["openai", "numpy", "opencv-python", "decord", "instructor"],
     system_packages=["ffmpeg"],
     python_version="3.10",
     metadata=metadata,
@@ -56,117 +81,140 @@ def main(
         detail_prompt = f"Caption the following about this scene in vivid detail. Short sentences: {additional_instructions}"
 
     # Load the video
-    start_time = time.time()
     video_path = video.path
 
-    if image_only:
-        # just get the middle frame and pass it to designated model
-        # get the middle frame
-        from decord import VideoReader
-        vr = VideoReader(video_path)
-        middle_frame = vr[len(vr) // 2].asnumpy()
-        import cv2
-        # Save the keyframe as an image after doing BGR to RGB conversion
-        middle_frame = cv2.cvtColor(middle_frame, cv2.COLOR_BGR2RGB)
-        cv2.imwrite("middle_frame.jpg", middle_frame)
+    if spoken_context and not image_only:
+        print("Transcribing the audio...")
+        # Transcribe the audio
+        transcription_job = whisper.push(video)
+    
+    print("Loading video...")
+    video_reader, video_duration, fps = get_video_info(video_path)
+
+    chunk_size = 60
+
+    print("Calculating keyframes...")
+    if not image_only:
+        keyframes = []
+        for start_time in range(0, int(video_duration), chunk_size):
+            end_time = min(start_time + chunk_size, video_duration)
+            keyframes.extend(calculate_keyframes(video_duration, fps, start_time, end_time))
+    else:
+        # just get the middle frame
+        keyframes = [video_duration / 2]
+    
+    import cv2
+    import os
+    import shutil
+
+    keyframes_folder = "keyframes"
+    if os.path.exists(keyframes_folder):
+        shutil.rmtree(keyframes_folder)
+    os.makedirs(keyframes_folder)
+
+    def extract_keyframe(keyframe):
+        keyframe_path = os.path.join(keyframes_folder, f"keyframe_{keyframe}.jpg")
+        frame = video_reader[keyframe].asnumpy()
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(keyframe_path, frame)
+        return keyframe_path
+
+    def process_keyframe(keyframe_path):
         model = model_mapping[visual_detail]
-        file_arg = file_type[visual_detail](path="middle_frame.jpg")
-        more_detailed_prompt = "Caption this scene with the most important details. Be as detailed as possible."
-        description = model.push(file_arg, more_detailed_prompt)
-        return description.result()
+        file_arg = file_type[visual_detail](path=keyframe_path)
+        keyframe_job = model.push(file_arg, detail_prompt)
+        return keyframe_job
 
-    from custom_types import Video, VideoChunk
-    from llm_prompts import SummaryPrompt
+    from concurrent.futures import ThreadPoolExecutor
+
+    print("Extracting keyframes...")
+    keyframe_paths = [extract_keyframe(keyframe) for keyframe in keyframes]
+
+    print("Generating visual captions...")
+    with ThreadPoolExecutor() as executor:
+        captioning_jobs = list(executor.map(process_keyframe, keyframe_paths))
     
-    print("Transcribing audio...")
-    transcription_job = whisper.push(video)
-    video = Video(path=video_path)
-    # the video is split into "chunks", and each chunk is processed in parallel
-    chunk_size = 60 # seconds
-    chunk_durations = video.extract_chunk_durations(chunk_size) # Extract the timestamps for each chunk
+    from instruct import Context, VideoContext, get_summary
+    context_list = []
 
-    def create_chunk(chunk_data, source_transcript=None):
-        i, (start, end) = chunk_data
-        chunk = VideoChunk(
-            chunk_number=i,
-            start_time=start,
-            end_time=end,
-            source_video_path=video_path,
-            source_transcript=source_transcript,
-        )
-        return chunk
-
-    def process_chunk(chunk):
-        # Keyframes are extracted from the chunk and used to generate a description
-        # Given the video's transcript, only the transcript present in the chunk is computed and used
-        keyframe_paths = chunk.compute_keyframes()
-
-        # extract the captions for each keyframe
-        captions = []
-        for keyframe_path in keyframe_paths:
-            model = model_mapping[visual_detail]
-            file_arg = file_type[visual_detail](path=keyframe_path)
-            keyframe_caption = model.push(file_arg, detail_prompt)
-            captions.append(keyframe_caption)
-        
-        captions_futures = list(captions)
-        captions_list = [future.result() for future in captions_futures]
-        
-        # Generate the visual summary
-        visual_summary = list(captions) if video.compute_duration() > 1200 else SummaryPrompt(content=captions_list, level_of_detail=conciseness, custom_detail=additional_instructions, llm_backend=llm_backend).video_summary()
-
-        return {chunk.chunk_number: visual_summary}
-
-    print("Understanding the visual content...")
-    # Process each chunk in parallel
-    chunk_summaries = []
-    chunks = [create_chunk((i, duration)) for i, duration in enumerate(chunk_durations, start=1)]
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        chunk_futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
-    
-    # Transcribe the audio
     if spoken_context:
-        transcript = []
+        print("Adding transcript to context...")
+        # Transcribe the audio
         for transcript_chunk in transcription_job.result():
             if transcript_chunk["text"] == "":
                 continue
-            transcript.append(transcript_chunk)
-        transcript = [segment["segments"] for segment in transcript]
-        # Extract only the start, end, and text for each segment, excluding the "words" part
-        transcript = [
-            {"start": item["start"], "end": item["end"], "text": item["text"]}
-            for sublist in transcript
-            for item in sublist
-        ]
-        video = Video(path=video_path, transcript=transcript)
-    else:
-        video = Video(path=video_path)
-        transcript = []
-
-    chunks = [create_chunk((i, duration), transcript) for i, duration in enumerate(chunk_durations, start=1)]
-    chunk_summaries = [future.result() for future in chunk_futures]
-
-    # If spoken context is enabled, combine the visual and audio summaries
-    if spoken_context:
-        new_chunk_summaries = []
-        for chunk_summary, chunk in zip(chunk_summaries, chunks):
-            keys = chunk_summary.keys()
-            first_key = next(iter(keys))
-            new_chunk_summaries.append({first_key: (chunk.compute_chunk_transcript(), chunk_summary[first_key])})
-        chunk_summaries = new_chunk_summaries
+            context_list.append(
+                Context(
+                    type="audio transcript",
+                    content=transcript_chunk["text"],
+                    start_time=round(transcript_chunk["segments"][0]["start"]),
+                    end_time=round(transcript_chunk["segments"][-1]["end"])
+                )
+            )
     
-    # Sort the list by the chunk number so they're in order
-    sorted_data = sorted(chunk_summaries, key=lambda x: next(iter(x)))
+    print("Adding visual captions to context...")
+    for job, keyframe in zip(captioning_jobs, keyframes):
+        caption = job.result()
+        context_list.append(
+            Context(
+                type="visual caption",
+                content=caption,
+                start_time=keyframe / fps,
+                end_time=keyframe / fps
+            )
+        )
 
-    print("Combining results...")
-    # Combine the results into a single summary
-    summary = SummaryPrompt(content=sorted_data, level_of_detail=conciseness, custom_detail=additional_instructions, llm_backend=llm_backend).audiovisual_summary()
+    # sort the context list by time
+    context_list = sorted(context_list, key=lambda x: x.start_time)
+    context = VideoContext(context_list=context_list)
 
-    print(f"Time taken: {time.time() - start_time}")
+    print(f"Generating summaries in {chunk_size} second chunks...")
+    # generate summaries for every 60 seconds of the video
+    # split the context into chunks of 60 seconds
+    split_context = {}
+    for item in context.context_list:
+        chunk_number = int(item.start_time // (chunk_size ))
+        if chunk_number not in split_context:
+            split_context[chunk_number] = []
+        split_context[chunk_number].append(item)
+    
+    from concurrent.futures import ThreadPoolExecutor
+
+    def generate_summary(chunk_data):
+        chunk_number, chunk = chunk_data
+        return chunk_number, get_summary(VideoContext(context_list=chunk), conciseness, llm_backend=llm_backend, additional_instructions=additional_instructions).summary
+
+    with ThreadPoolExecutor() as executor:
+        summaries = dict(executor.map(generate_summary, split_context.items()))
+    
+    summary_context_list = []
+    for chunk_number, summary in summaries.items():
+        summary_context_list.append(
+            Context(
+                type="summary",
+                content=summary,
+                start_time=chunk_number * chunk_size,
+                end_time=(chunk_number * chunk_size) + chunk_size
+            )
+        )
+    
+    if len(summary_context_list) == 1:
+        summary = summary_context_list[0].content
+    else:
+        print("Generating final summary...")
+        summary_context = VideoContext(context_list=summary_context_list)
+        summary = get_summary(
+            summary_context,
+            conciseness,
+            llm_backend=llm_backend,
+            additional_instructions="These are summaries at various points in the video. Combine them to create a single comprehensive summary in chronological order."
+        ).summary
+    
+    print("Done!")
     return summary
 
 if __name__ == "__main__":
-    describe = sieve.function.get("sieve-internal/describe")
-    import os
-    for file in os.listdir("tests"):
-        print(describe.push(video=sieve.File(path=f"tests/{file}", llm_backend="mixtral")))
+    print(main(
+        video=sieve.File(url="https://sieve-prod-us-central1-persistent-bucket.storage.googleapis.com/0a27f1ed-b241-4a1e-8b3c-e8aff3b8379c/c4d0a666-d3a5-4503-952a-1ee8787be2bf/7afcfcb1-2704-414f-8253-0617120b9494/tmpgbxp7us0.mp4?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=abhi-admin%40sieve-grapefruit.iam.gserviceaccount.com%2F20240418%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20240418T010356Z&X-Goog-Expires=172800&X-Goog-SignedHeaders=host&x-goog-signature=1ef4e1328ec5597307d3955896cb6aae049e8858e32f4177c431da86da002b701ac750cb96a6963587a4a56e58e9065706a56772b11fb45fef6bef249d5172c3ce41854e74cc21552a01024a492e5e5e56d29312bb3fb88cb5be0e5b4f3bf3fcfe6537fb3e9065c0cf4cc4f2a5e310990fb865d3db2318b50665fa6f0324e061bec537557845eebb5fd2c914851900e1236bee3b3f274f58658172526c438132a3897c3bfd0657e0b0f6c81fe4b01c23b23f5ec43f1473f304a03e7e8635cc5725c27f7d7970d125ab008da34a8e2fe580c9dbfe06740860aaecf0b42ad5ec72046bdc2aba66901584b9c0ae96a02c9930553d665c0a59b2d9b51c11690172da"),
+        conciseness="concise",
+    ))
