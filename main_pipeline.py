@@ -182,7 +182,11 @@ def main(
 
     def generate_summary(chunk_data):
         chunk_number, chunk = chunk_data
-        return chunk_number, get_summary(VideoContext(context_list=chunk), conciseness, llm_backend=llm_backend, additional_instructions=additional_instructions).summary
+        if len(chunk) == 1:
+            new_additional_instructions = f"{additional_instructions}. Preserve as much detail as possible from the original context."
+        else:
+            new_additional_instructions = additional_instructions
+        return chunk_number, get_summary(VideoContext(context_list=chunk), conciseness, llm_backend=llm_backend, additional_instructions=new_additional_instructions).summary
 
     with ThreadPoolExecutor() as executor:
         summaries = dict(executor.map(generate_summary, split_context.items()))
