@@ -317,22 +317,7 @@ def main(
         return summary
 
 if __name__ == "__main__":
-    # print(main(
-    #     video=sieve.File(url="https://storage.googleapis.com/sieve-prod-us-central1-public-file-upload-bucket/a3db863d-aaff-4243-9cd2-846bc9a64925/8888b955-21e9-4e59-b285-bf07437f76b9-input-file.mp4"),
-    #     conciseness="concise",
-    #     llm_backend="mixtral",
-    #     spoken_context=False,
-    #     # detail_boost=True,
-    #     object_context=True,
-    #     chunk_by_scene=True,
-    #     return_metadata=True
-    # ))
-
-    import os
-
-    dir = "/Users/Mokshith/Desktop/testsdescribe"
-    describe = sieve.function.get("sieve-developer/describe")
-    for file in os.listdir(dir)[2:6]:
-        if file.endswith(".mp4"):
-            print(f"Processing {file}")
-            print(describe.push(video=sieve.File(path=os.path.join(dir, file)), llm_backend="mixtral"))
+    print(main(
+        video=sieve.File(url="https://storage.googleapis.com/sieve-prod-us-central1-public-file-upload-bucket/3bb46d4e-0583-4b50-bd2f-64b960f47dab/05cc9bfc-a44c-4c03-94d7-1edff2b7f7c7-input-video.mp4"),
+        conciseness="concise",
+    ))
