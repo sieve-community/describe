@@ -110,6 +110,13 @@ def main(
         scene_detection_thread = Thread(target=scene_detection_wrapper, args=(video, scene_detection_result), kwargs={'adaptive_threshold': True})
         scene_detection_thread.start()
 
+
+    if spoken_context and not image_only:
+        print("Transcribing the audio...")
+        # Transcribe the audio
+        transcription_job = whisper.push(video)
+    
+    
     if spoken_context and not image_only:
         print("Transcribing the audio...")
         # Transcribe the audio
@@ -152,10 +159,10 @@ def main(
                 keyframes.extend(calculate_keyframes(video_duration, fps, scene["start_seconds"], scene["end_seconds"]))
     else:
         # just get the middle frame
-        keyframes = [video_duration / 2]
+        keyframes = [int(video_duration // 2)]
     
     def get_relevant_chunk(time):
-        if chunk_by_scene:
+        if chunk_by_scene and not image_only:
             for index, scene in enumerate(scenes):
                 if scene["start_seconds"] <= time <= scene["end_seconds"]:
                     return scene["start_seconds"], scene["end_seconds"], index
@@ -165,6 +172,11 @@ def main(
                 return start_time, end_time, index
         return 0, video_duration, 0
     
+    if spoken_context and not image_only:
+        print("Transcribing the audio...")
+        # Transcribe the audio
+        transcription_job = whisper.push(video)
+
     import cv2
     import os
     import shutil
@@ -196,10 +208,13 @@ def main(
     with ThreadPoolExecutor() as executor:
         captioning_jobs = list(executor.map(process_keyframe, keyframe_paths))
     
+    # if image_only, return the captions and keyframes
+    if image_only:
+        return captioning_jobs[0].result()
     from instruct import Context, VideoContext, get_summary, get_key_objects
     context_list = []
 
-    if spoken_context:
+    if spoken_context and not image_only:
         print("Adding transcript to context...")
         # Transcribe the audio
         for transcript_chunk in transcription_job.result():
