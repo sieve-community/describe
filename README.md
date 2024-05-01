@@ -50,3 +50,7 @@ The default is  `concise`.
 ### Spoken Context
 
 This option dictates the usage of the speech in the video to influence the final summary. If set to `False`, the summary will be generated based on only the visuals seen across the video. If set to `True`, GPT3.5 will be used first to create shorter summaries which will then be combined at the end to create the final summary.
+
+### Enable References
+
+This option will give sentence level references for each sentence in the summary. It gives references to audio transcripts, visual captions and objects in the scenes, with start time and end_time indicating the span of each sentence in the video. It enables chunk_by_scene by default for better context. 

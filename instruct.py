@@ -2,18 +2,25 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 import os
 import instructor
-from typing import Optional, List
+from typing import Optional, List, Union
+import json
+from nltk.tokenize import sent_tokenize
+
+
 
 '''
 Data models for generating summaries
 - Context: The context of the video
 - VideoContext: The list of contexts for the video
-- Summary: The summary of the video
+- SummaryContext: The context of each summary sentence
+- Summary: The list of summary sentences with their context
 '''
 
+
 class Context(BaseModel):
+    id: str = Field(description= "The id of the context")
     type: str = Field(description="The type of context")
-    content: str = Field(description="The content of the context")
+    content: Union[str,dict] = Field(description="The content of the context")
     start_time: float = Field(description="The time in seconds when the context appears in the video")
     end_time: float = Field(description="The time in seconds when the context ends in the video")
 
@@ -21,7 +28,8 @@ class VideoContext(BaseModel):
     context_list: List[Context] = Field(description="List of contexts for the video")
 
 class Summary(BaseModel):
-    summary: str
+    summary: str = Field(description="The summary of the video")
+
 
 def get_summary(context: VideoContext, conciseness: str = "concise", llm_backend: str = "openai", additional_instructions = None) -> Summary:
     if llm_backend == "mixtral":
@@ -134,3 +142,103 @@ def get_key_objects(context: VideoContext, llm_backend: str = "openai") -> KeyOb
         ],
         max_retries=3
     ).choices[0].message.content.strip()
+
+
+
+class References(BaseModel):
+    sentence: str = Field(description="Sentence of the summary for which we need references. ")
+    start_time: float = Field(description="The time in seconds when the current sentence appears in the video")
+    end_time: float = Field(description="The time in seconds when the current sentence ends in the video")
+    context_ids : List[str] = Field(description="The ids of the context used to construct summary sentence")
+
+class SummaryTimestamps(BaseModel):
+    references: List[References] = Field(description="List of references for each sentence in the summary")
+
+
+def get_references(context: VideoContext, summary: Summary, llm_backend: str = "openai") -> SummaryTimestamps:
+
+    if llm_backend == "mixtral":
+        API_KEY = os.getenv("TOGETHERAI_API_KEY")
+    else:
+        API_KEY = os.getenv("OPENAI_API_KEY")
+    if not API_KEY or API_KEY == "":
+        raise Exception("OPENAI_API_KEY or TOGETHERAI_API_KEY environment variable not set")
+
+    if llm_backend == "mixtral":
+        client = OpenAI(api_key=API_KEY, base_url="https://api.together.xyz/v1")
+    else:
+        client = OpenAI(api_key=API_KEY)
+
+    client = instructor.patch(client)
+    
+    model = "gpt-4-turbo-preview" if llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
+    SYSTEM_PROMPT = f'''
+    Provide references for each sentence in the summary given to you. The references should be the context_ids of the contexts used to construct the summary sentence.
+    - The references should be in the order of the sentences in the summary
+    - Each sentence should have a list of context_ids that were used to construct the sentence
+    - A sentence can have multiple references.
+    - Do not return same sentence multiple times.
+    - Do not return empty sentences.
+    - You must provide references for all the sentences in the summary_sentences list, do not miss any sentence.
+    - The context_ids should be the ids of the contexts used to construct the summary sentence
+    - you must also give start_time and end_time for each sentence these should be inferred from the context start_time and end_time
+    - You must provide references for each sentence in the summary do not skip any sentence or provide empty context_ids list
+    - Do not include any content given to you in context_list in your response except for the context_ids and the start_time and end_time
+    '''
+    json_context = context.dict()
+    summary_sentences = {"summary_sentences": sent_tokenize(summary.summary)}
+
+
+    if llm_backend == "openai":
+        return client.chat.completions.create(
+            model=model,
+            response_model=SummaryTimestamps,
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": f"{summary_sentences}"
+                },
+                {
+                    "role": "user",
+                    "content": f"{json_context}"
+                }
+
+            ],
+            max_retries=4
+        )
+    else:
+        response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": f"{summary_sentences}"
+                    },
+
+
+                    {
+                        "role": "user",
+                        "content": f"{json_context}"
+                    },
+
+                ],
+                response_format ={
+                "type": "json_object", 
+                "schema": SummaryTimestamps.model_json_schema()
+                },
+                max_retries=4
+            )
+        summary_obj = SummaryTimestamps.parse_raw(response.choices[0].message.content)
+        return summary_obj
+
+    
+
