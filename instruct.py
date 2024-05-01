@@ -12,8 +12,11 @@ from nltk.tokenize import sent_tokenize
 Data models for generating summaries
 - Context: The context of the video
 - VideoContext: The list of contexts for the video
-- SummaryContext: The context of each summary sentence
-- Summary: The list of summary sentences with their context
+- Summary: The Summary of the video
+
+References models for generating timestamps
+- SummaryTimestamps: A List of each sentence with their references
+- References: The references used to construct summary sentence.
 '''
 
 
