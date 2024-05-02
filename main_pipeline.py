@@ -91,7 +91,7 @@ def main(
     :param spoken_context: Whether to use the transcript when generating the final description
     :param object_context: Whether to use object detection when generating the final description. BETA FEATURE.
     :param detail_boost: If true, we prompt the underlying models to return even more details in their responses. This can be useful if the initial responses are too vague or lacking in detail.
-    :param enable_references: If true, the function will return the references used to generate the description, including the timestamps, visual captions and transcripts (enables chunk_by_scene by default).
+    :param enable_references: If true, the function will return the references used to generate the description as citations to each sentence, including the timestamps, visual captions and transcripts. chunk_by_scene is auto-enabled if this option is selected.
     :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
     :param chunk_by_scene: If true, the video will be chunked by scene instead of by 60s intervals. This can be useful for videos with multiple scenes or cuts.
     :param return_metadata: If true, the function will return all the granular data used to generate the description, including the keyframes, visual captions, object detections, and summaries.
@@ -278,7 +278,6 @@ def main(
                 x1, y1, x2, y2 = box["x1"], box["y1"], box["x2"], box["y2"]
                 center_x = int((x1 + x2) / 2)
                 center_y = int((y1 + y2) / 2)
-                print("box found")
                 if enable_references:
                     if class_name not in objects_found:
                         context_list.append(
@@ -398,7 +397,7 @@ def main(
     if return_metadata:
         chunk_metadata = []
         for key, context_objs in split_context.items():
-            chunk_summary = summaries[key]
+            chunk_summary = summaries[key].summary
             chunk_start, chunk_end, chunk_number = get_relevant_chunk(context_objs[0].start_time)
             context_dict = [{"type": obj.type, "content": obj.content, "start_time": obj.start_time, "end_time": obj.end_time} for obj in context_objs]
             chunk_metadata.append({
@@ -421,8 +420,7 @@ def main(
 if __name__ == "__main__":
     print(main(
         video=sieve.File(url="https://storage.googleapis.com/sieve-prod-us-central1-public-file-upload-bucket/3bb46d4e-0583-4b50-bd2f-64b960f47dab/05cc9bfc-a44c-4c03-94d7-1edff2b7f7c7-input-video.mp4"),
-        conciseness="concise",
-        enable_references = True,
+        # conciseness="concise"
     ))
     
 
