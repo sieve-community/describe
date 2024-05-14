@@ -49,7 +49,7 @@ def get_summary(context: VideoContext, conciseness: str = "concise", llm_backend
 
     client = instructor.patch(client)
     
-    model = "gpt-4-turbo-preview" if llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    model = "gpt-4o-2024-05-13" if llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1"
 
     detail_map = {
         "concise": "The summary should be concise and easy to understand, and should not be longer than 100 words.",
@@ -118,7 +118,7 @@ def get_key_objects(context: VideoContext, llm_backend: str = "openai") -> KeyOb
 
     client = instructor.patch(client)
     
-    model = "gpt-4-turbo-preview" if llm_backend == "openai" else "mistralai/Mixtral-8x22B-Instruct-v0.1"
+    model = "gpt-4o-2024-05-13" if llm_backend == "openai" else "mistralai/Mixtral-8x22B-Instruct-v0.1"
 
     SYSTEM_PROMPT = f'''
     Provide a comma separated list of key objects that might be present in the video based on the context.
@@ -174,7 +174,7 @@ def get_references(context: VideoContext, summary: Summary, llm_backend: str = "
 
     client = instructor.patch(client)
     
-    model = "gpt-4-turbo-preview" if llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    model = "gpt-4o-2024-05-13" if llm_backend == "openai" else "mistralai/Mixtral-8x7B-Instruct-v0.1"
 
     SYSTEM_PROMPT = f'''
     Provide references for each sentence in the summary given to you. The references should be the context_ids of the contexts used to construct the summary sentence.
