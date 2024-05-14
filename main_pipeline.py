@@ -1,4 +1,5 @@
 import sieve
+from typing import Literal
 
 metadata = sieve.Metadata(
     title="Generate a Video Description",
@@ -74,8 +75,8 @@ file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image, "ultr
 )
 def main(
     video: sieve.File,
-    conciseness: str = "concise",
-    visual_detail: str = "high",
+    conciseness: Literal["concise", "medium", "detailed"] = "concise",
+    visual_detail: Literal["low", "medium", "high", "ultra"] = "high",
     spoken_context: bool = True,
     object_context: bool = False,
     detail_boost: bool = False,
