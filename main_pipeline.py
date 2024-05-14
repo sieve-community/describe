@@ -30,23 +30,22 @@ def get_video_info(video_path):
 
 def calculate_keyframes(video_duration, frame_rate, start_time, end_time, visual_detail="high"):
     chunk_duration = end_time - start_time
-    # If duration > 20 minutes, use the middle frame of the chunk as the keyframe unless visual_detail is ultra, then use 3 frames
-    if visual_detail == "ultra" and video_duration > 5:
-        frame_numbers = [int((start_time + chunk_duration / 4) * frame_rate), int((start_time + chunk_duration / 2) * frame_rate), int((start_time + 3 * chunk_duration / 4) * frame_rate)]
-    else:
-        if video_duration > 1200:  
-            frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
-        # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
-        elif video_duration > 5:
-            frame_numbers = [
-                int((start_time + (chunk_duration / 4) * i) * frame_rate) for i in [1, 3]
-            ]
+    quarter_frame = int((start_time + chunk_duration / 4) * frame_rate)
+    mid_frame = int((start_time + chunk_duration / 2) * frame_rate)
+    three_quarters_frame = int((start_time + 3 * chunk_duration / 4) * frame_rate)
+
+    if video_duration > 5:
+        if visual_detail == "ultra":
+            frame_numbers = [quarter_frame, mid_frame, three_quarters_frame]
+        elif video_duration > 1200:
+            frame_numbers = [mid_frame]
         else:
-            # if duration < 5 seconds, extract just the middle frame
-            frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
-    
-    frame_numbers = [{ 'frame_number': frame_number, 'start_time': start_time, 'end_time': end_time} for frame_number in frame_numbers]
-    return frame_numbers
+            frame_numbers = [quarter_frame, three_quarters_frame]
+    else:
+        frame_numbers = [mid_frame]
+
+    return [{'frame_number': fn, 'start_time': start_time, 'end_time': end_time} for fn in frame_numbers]
+
 
 # Sieve functions
 whisper = sieve.function.get("sieve/speech_transcriber")
@@ -89,16 +88,16 @@ def main(
 ):
     """
     :param video: The video to be described
-    :param conciseness: The level of detail for the final description. Pick from 'concise', 'medium', or 'detailed'
-    :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', 'high', or 'ultra'
-    :param spoken_context: Whether to use the transcript when generating the final description
+    :param conciseness: The level of detail for the final description. Pick from 'concise', 'medium', or 'detailed'.
+    :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', 'high', or 'ultra'.
+    :param spoken_context: Whether to use the transcript when generating the final description.
     :param object_context: Whether to use object detection when generating the final description. BETA FEATURE.
     :param detail_boost: If true, we prompt the underlying models to return even more details in their responses. This can be useful if the initial responses are too vague or lacking in detail.
     :param enable_references: If true, the function will return the references used to generate the description as citations to each sentence, including the timestamps, visual captions and transcripts. chunk_by_scene is auto-enabled if this option is selected.
     :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
     :param chunk_by_scene: If true, the video will be chunked by scene instead of by 60s intervals. This can be useful for videos with multiple scenes or cuts.
     :param return_metadata: If true, the function will return all the granular data used to generate the description, including the keyframes, visual captions, object detections, and summaries.
-    :param additional_instructions: Any additional instructions on the questions to answer or the details to emphasize in the final description
+    :param additional_instructions: Any additional instructions on the questions to answer or the details to emphasize in the final description.
     :param llm_backend: The backend to use for the LLM model. Pick from 'openai' or 'mixtral'. Requires 3rd party API keys. See the README for more information.
     :return: The description
     """
@@ -230,10 +229,8 @@ def main(
     def process_scenes(scene_frames):
         model = model_mapping[visual_detail]
         file_arg = file_type[visual_detail](path=video_path)
-        keyframe_numbers = str(scene_frames)
-        keyframe_numbers = keyframe_numbers.replace("[", "").replace("]", "").replace(" ", "")
-        scene_job = model.push(file_arg, detail_prompt, sampling_strategy=keyframe_numbers)
-        return scene_job
+        keyframe_numbers = ",".join(map(str, scene_frames))
+        return model.push(file_arg, detail_prompt, sampling_strategy=keyframe_numbers)
 
     from concurrent.futures import ThreadPoolExecutor
 

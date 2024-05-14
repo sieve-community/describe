@@ -15,7 +15,8 @@ Note: This app uses functions that run on the [Sieve](https://www.sievedata.com)
 - [Speech Transcriber](https://www.sievedata.com/functions/sieve/speech_transcriber) for transcriptions
 - [MoonDream](https://www.sievedata.com/functions/sieve/moondream) (Low visual detail but fastest)
 - [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) (Medium visual detail and speed)
-- [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High visual detail but slowest)
+- [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) (High visual detail but slower)
+- [VILA](https://www.sievedata.com/functions/sieve/vila) (Ultra high visual detail but slowest)
 
 Summaries are generated using an LLM backend that combines various pieces of context. We have two options for this: `openai` and `mixtral`.
 - If `openai` is selected, we use GPT-4 by OpenAI.
@@ -33,9 +34,10 @@ This preset influences how much visual detail is present in the final summary by
 
 - `low` uses [MoonDream](https://www.sievedata.com/functions/sieve/moondream) - a lightweight and very fast VLM that is ideal for scenarios that don't require too much visual information. This is the fastest in terms of response time but not very high in detail
 - `medium` uses [InternLM-X](https://www.sievedata.com/functions/sieve/internlmx-composer-2q) - a SOTA VLM that outperforms GPT4v in many benchmarks. This is the 4bit quantized version and falls in between the other two in terms of speed and detail.
-- `high` uses [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) - a very rich and detailed VLM that uses a full sized LLM with it to generate captions, making it capable of highly detailed captions. This is the slowest in terms of response time but high in detail.
+- `high` uses [CogVLM](https://www.sievedata.com/functions/sieve/cogvlm-chat) - a very rich and detailed VLM that uses a full sized LLM with it to generate captions, making it capable of highly detailed captions. This is slower in terms of response time but high in detail.
+- `ultra` uses [VILA](https://www.sievedata.com/functions/sieve/vila) - a VLM pretrained with video understanding as a core focus, allowing it to work with multiple frames of a video at once. This allows the VLM to work with longer sections of a video at the same time, capturing more detail and providing better captions.
 
-The default is `medium`.
+The default is `high`.
 
 ### Conciseness
 
