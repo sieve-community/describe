@@ -85,7 +85,7 @@ def main(
     return_metadata: bool = False,
     image_only: bool = False,
     additional_instructions: str = "",
-    llm_backend: str = "openai",
+    llm_backend: Literal["openai", "mixtral"] = "openai",
 ):
     """
     :param video: The video to be described
