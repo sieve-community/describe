@@ -115,10 +115,7 @@ def main(
             detail_prompt = "Caption this scene in vivid detail. Short sentences."
     
     if additional_instructions:
-        if visual_detail == "ultra":
-            detail_prompt = f"{detail_prompt}. {additional_instructions}"
-        else:
-            detail_prompt = f"{detail_prompt}. {additional_instructions}"
+        detail_prompt = f"{detail_prompt}. {additional_instructions}"
     
     if enable_references:
         # for better timestamps we chunk by scene
