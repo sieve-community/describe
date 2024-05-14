@@ -71,6 +71,7 @@ file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image, "ultr
         sieve.Env(name="OPENAI_API_KEY", description="OpenAI API Key", default=""),
         sieve.Env(name="TOGETHERAI_API_KEY", description="Together API Key", default=""),
     ],
+    restart_on_error=False
 )
 def main(
     video: sieve.File,
@@ -101,17 +102,22 @@ def main(
     :param llm_backend: The backend to use for the LLM model. Pick from 'openai' or 'mixtral'. Requires 3rd party API keys. See the README for more information.
     :return: The description
     """
-    detail_prompt = "Caption this scene in vivid detail."
+    detail_prompt = "Caption this scene in vivid detail. Short sentences."
 
-    # "Short sentences" seems to cause some trouble with VILA
-    if visual_detail != "ultra":
-        detail_prompt += " Short sentences."
+    if visual_detail == "ultra":
+        detail_prompt = "Please describe this video in a lot of detail."
     
     if additional_instructions:
-        detail_prompt = f"Caption the following about this scene in vivid detail. Short sentences: {additional_instructions}"
+        if visual_detail == "ultra":
+            detail_prompt = f"Please describe the following: {additional_instructions}"
+        else:
+            detail_prompt = f"Caption the following about this scene in vivid detail. Short sentences: {additional_instructions}"
     
     if detail_boost:
-        detail_prompt = f"{detail_prompt}. Be extremely detailed."
+        if visual_detail == "ultra":
+            detail_prompt = "Elaborate on the visual and narrative elements of the video in detail."
+        else:
+            detail_prompt = f"{detail_prompt}. Be extremely detailed."
     
     if enable_references:
         # for better timestamps we chunk by scene
