@@ -28,33 +28,36 @@ def get_video_info(video_path):
     duration = frame_count / fps
     return vr, duration, fps
 
-def calculate_keyframes(video_duration, frame_rate, start_time, end_time):
+def calculate_keyframes(video_duration, frame_rate, start_time, end_time, visual_detail="high"):
     chunk_duration = end_time - start_time
-    # If duration > 20 minutes, use the middle frame of the chunk as the keyframe
-    if video_duration > 1200:  
-        frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
-    # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
-    elif video_duration > 5:
-        frame_numbers = [
-            int((start_time + (chunk_duration / 4) * i) * frame_rate) for i in [1, 3]
-        ]
+    # If duration > 20 minutes, use the middle frame of the chunk as the keyframe unless visual_detail is ultra, then use 3 frames
+    if visual_detail == "ultra" and video_duration > 5:
+        frame_numbers = [int((start_time + chunk_duration / 4) * frame_rate), int((start_time + chunk_duration / 2) * frame_rate), int((start_time + 3 * chunk_duration / 4) * frame_rate)]
     else:
-        # if duration < 5 seconds, extract just the middle frame
-        frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
+        if video_duration > 1200:  
+            frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
+        # If duration < 20 minutes, extract 1st and 3rd quarter frames of the chunk
+        elif video_duration > 5:
+            frame_numbers = [
+                int((start_time + (chunk_duration / 4) * i) * frame_rate) for i in [1, 3]
+            ]
+        else:
+            # if duration < 5 seconds, extract just the middle frame
+            frame_numbers = [int((start_time + chunk_duration / 2) * frame_rate)]
     
     frame_numbers = [{ 'frame_number': frame_number, 'start_time': start_time, 'end_time': end_time} for frame_number in frame_numbers]
     return frame_numbers
-
 
 # Sieve functions
 whisper = sieve.function.get("sieve/speech_transcriber")
 moondream = sieve.function.get("sieve/moondream")
 internlm = sieve.function.get("sieve/internlmx-composer-2q")
 cogvlm = sieve.function.get("sieve/cogvlm-chat")
+vila = sieve.function.get("sieve/vila")
 yoloworld = sieve.function.get("sieve/yolov8")
 
-model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm}
-file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image}
+model_mapping = {"low": moondream, "medium": internlm, "high": cogvlm, "ultra": vila}
+file_type = {"low": sieve.File, "medium": sieve.File, "high": sieve.Image, "ultra": sieve.File}
 
 @sieve.function(
     name="describe",
@@ -87,7 +90,7 @@ def main(
     """
     :param video: The video to be described
     :param conciseness: The level of detail for the final description. Pick from 'concise', 'medium', or 'detailed'
-    :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', or 'high'
+    :param visual_detail: The level of visual detail for the final description. Pick from 'low', 'medium', 'high', or 'ultra'
     :param spoken_context: Whether to use the transcript when generating the final description
     :param object_context: Whether to use object detection when generating the final description. BETA FEATURE.
     :param detail_boost: If true, we prompt the underlying models to return even more details in their responses. This can be useful if the initial responses are too vague or lacking in detail.
@@ -99,7 +102,12 @@ def main(
     :param llm_backend: The backend to use for the LLM model. Pick from 'openai' or 'mixtral'. Requires 3rd party API keys. See the README for more information.
     :return: The description
     """
-    detail_prompt = "Caption this scene in vivid detail. Short sentences."
+    detail_prompt = "Caption this scene in vivid detail."
+
+    # "Short sentences" seems to cause some trouble with VILA
+    if visual_detail != "ultra":
+        detail_prompt += " Short sentences."
+    
     if additional_instructions:
         detail_prompt = f"Caption the following about this scene in vivid detail. Short sentences: {additional_instructions}"
     
@@ -120,17 +128,16 @@ def main(
         scene_detection_thread = Thread(target=scene_detection_wrapper, args=(video, scene_detection_result), kwargs={'adaptive_threshold': True})
         scene_detection_thread.start()
 
-    
-
     print("Loading video...")
     video_reader, video_duration, fps = get_video_info(video_path)
     chunk_size = 60
-
     
     print("Calculating keyframes...")
     if not image_only:
         keyframes = []
         scenes = []
+        scene_frames = []
+
         if chunk_by_scene:
             print("Chunking video by scene segments...")
             # Get the result from the Queue
@@ -138,23 +145,25 @@ def main(
             scene_future = scene_detection_result.get()
             scenes = list(scene_future)
             
-
         if len(scenes) == 0:
             if not chunk_by_scene: # default chunking
                 for start_time in range(0, int(video_duration), chunk_size):
                     end_time = min(start_time + chunk_size, video_duration)
-                    keyframes.extend(calculate_keyframes(video_duration, fps, start_time, end_time))   
+                    keyframe_calculation = calculate_keyframes(video_duration, fps, start_time, end_time, visual_detail)
+                    keyframes.extend(keyframe_calculation)   
+                    scene_keyframes = [keyframe['frame_number'] for keyframe in keyframe_calculation]
+                    scene_frames.append(scene_keyframes)
             else:  # if no scenes detected (means scene is approx same throughout the video)
-                keyframes.extend(calculate_keyframes(video_duration, fps, 0, video_duration)) 
+                keyframe_calculation = calculate_keyframes(video_duration, fps, 0, video_duration, visual_detail)
+                keyframes.extend(keyframe_calculation) 
+                scene_keyframes = [keyframe['frame_number'] for keyframe in keyframe_calculation]
+                scene_frames.append(scene_keyframes)
                 
-
- 
         else:
             min_scene_duration = max(video_duration / 20, 10)
             # join scenes together
             merged_scenes = []
             current_scene = scenes[0]
-            # print(scenes)
             for scene in scenes[1:]:
                 if current_scene["end_seconds"] - current_scene["start_seconds"] < min_scene_duration:
                     current_scene["end_seconds"] = scene["end_seconds"]
@@ -166,15 +175,18 @@ def main(
             
             scenes = merged_scenes
             for scene in scenes:
-                keyframes.extend(calculate_keyframes(video_duration, fps, scene["start_seconds"], scene["end_seconds"]))
+                keyframe_calculation = calculate_keyframes(video_duration, fps, scene["start_seconds"], scene["end_seconds"], visual_detail)
+                scene_keyframes = [keyframe['frame_number'] for keyframe in keyframe_calculation]
+                scene_frames.append(scene_keyframes)
+                keyframes.extend(keyframe_calculation)
     else:
         # just get the middle frame
         keyframes = [{ 'frame_number': int(video_duration // 2),
                         'start_time': 0,
                         'end_time': video_duration
-       
         }]
-    
+        scene_frames = [[int(video_duration // 2)]]
+
     def get_relevant_chunk(time):
         if chunk_by_scene and not image_only:
             for index, scene in enumerate(scenes):
@@ -214,6 +226,15 @@ def main(
         keyframe_job = model.push(file_arg, detail_prompt)
         return keyframe_job
 
+    # only used if VILA is chosen
+    def process_scenes(scene_frames):
+        model = model_mapping[visual_detail]
+        file_arg = file_type[visual_detail](path=video_path)
+        keyframe_numbers = str(scene_frames)
+        keyframe_numbers = keyframe_numbers.replace("[", "").replace("]", "").replace(" ", "")
+        scene_job = model.push(file_arg, detail_prompt, sampling_strategy=keyframe_numbers)
+        return scene_job
+
     from concurrent.futures import ThreadPoolExecutor
 
     print("Extracting keyframes...")
@@ -221,7 +242,10 @@ def main(
 
     print("Generating visual captions...")
     with ThreadPoolExecutor() as executor:
-        captioning_jobs = list(executor.map(process_keyframe, keyframe_paths))
+        if visual_detail == "ultra":
+            captioning_jobs = list(executor.map(process_scenes, scene_frames))
+        else:
+            captioning_jobs = list(executor.map(process_keyframe, keyframe_paths))
     
     # if image_only, return the captions and keyframes
     if image_only:
@@ -229,7 +253,6 @@ def main(
     
     from instruct import Context, VideoContext, get_summary, get_key_objects, Summary, get_references
     context_list = []
-
 
     if spoken_context and not image_only:
         print("Adding transcript to context...")
@@ -310,15 +333,11 @@ def main(
                             end_time=int(round(float(frame_number) / fps))
                         )
                     )
-                
-
 
     # sort the context list by time
     context_list = sorted(context_list, key=lambda x: x.start_time)
-    
 
     context = VideoContext(context_list=context_list)
-
 
     print(f"Generating summaries...")
     # generate summaries for every 60 seconds of the video
@@ -332,15 +351,12 @@ def main(
     
     from concurrent.futures import ThreadPoolExecutor
 
-
     def generate_summary(chunk_data):
         chunk_number, chunk = chunk_data
         return chunk_number, get_summary(VideoContext(context_list=chunk), conciseness, llm_backend=llm_backend, additional_instructions=additional_instructions)
 
-
     with ThreadPoolExecutor() as executor:
         summaries = dict(executor.map(generate_summary, split_context.items()))
-
 
     summary_context_list = []
     for chunk_number, summary in summaries.items():
@@ -353,8 +369,6 @@ def main(
                 end_time=get_relevant_chunk(chunk_number)[1]
             )
         )
-
-    
 
     def map_references(summary_list : list):
         # filters the context_list to get only the context_ids that are in the summary references
@@ -381,8 +395,6 @@ def main(
             additional_instructions="These are summaries at various points in the video. Combine them to create a single comprehensive summary in chronological order."
         ).summary
     
- 
-
     print('Generating references...')
     if enable_references:
         summary_obj = Summary(summary=summary)
