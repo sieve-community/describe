@@ -81,6 +81,7 @@ def main(
     object_context: bool = False,
     detail_boost: bool = False,
     chunk_by_scene: bool = False,
+    minimum_scene_duration: int = -1,
     enable_references: bool = False,
     return_metadata: bool = False,
     image_only: bool = False,
@@ -96,7 +97,8 @@ def main(
     :param detail_boost: If true, we prompt the underlying models to return even more details in their responses. This can be useful if the initial responses are too vague or lacking in detail.
     :param enable_references: If true, the function will return the references used to generate the description as citations to each sentence, including the timestamps, visual captions and transcripts. chunk_by_scene is auto-enabled if this option is selected.
     :param image_only: By default, describe makes a combination of calls (some which include OpenAI) that generate the most vivid descriptions. This variable instead allows you to simply sample the middle frame of the video for a pure visual description that is less detailed, but doesn't require any external API calls.
-    :param chunk_by_scene: If true, the video will be chunked by scene instead of by 60s intervals. This can be useful for videos with multiple scenes or cuts.
+    :param chunk_by_scene: If true, the video will be chunked by scene instead of by 60s intervals. This can be useful to extract more detailed descriptions for videos with multiple scenes or cuts.
+    :param minimum_scene_duration: The minimum duration of a scene in seconds. By default, the function will set a minimum duration of 1/20 of the video duration. If the scene is shorter than this duration, it will be merged with the next scene. Only used if chunk_by_scene is enabled.
     :param return_metadata: If true, the function will return all the granular data used to generate the description, including the keyframes, visual captions, object detections, and summaries.
     :param additional_instructions: Any additional instructions on the questions to answer or the details to emphasize in the final description.
     :param llm_backend: The backend to use for the LLM model. Pick from 'openai' or 'mixtral'. Requires 3rd party API keys. See the README for more information.
@@ -163,7 +165,7 @@ def main(
                 scene_frames.append(scene_keyframes)
                 
         else:
-            min_scene_duration = max(video_duration / 20, 10)
+            min_scene_duration = max(video_duration / 20, 10) if minimum_scene_duration == -1 else minimum_scene_duration
             # join scenes together
             merged_scenes = []
             current_scene = scenes[0]
