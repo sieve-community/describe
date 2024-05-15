@@ -206,7 +206,7 @@ def main(
     if spoken_context and not image_only:
         print("Transcribing the audio...")
         # Transcribe the audio
-        transcription_job = whisper.push(video)
+        transcription_job = whisper.push(video, use_pyannote_segmentation=True)
     
     import cv2
     import os
