@@ -259,19 +259,22 @@ def main(
 
     if spoken_context and not image_only:
         print("Adding transcript to context...")
-        # Transcribe the audio
-        for transcript_chunk in transcription_job.result():
-            if transcript_chunk["text"] == "":
-                continue
-            context_list.append(
-                Context(
-                    id = str(uuid.uuid4())[:8],
-                    type="audio transcript",
-                    content=transcript_chunk["text"],
-                    start_time=round(transcript_chunk["segments"][0]["start"]),
-                    end_time=round(transcript_chunk["segments"][-1]["end"])
+        try:
+            # Transcribe the audio
+            for transcript_chunk in transcription_job.result():
+                if transcript_chunk["text"] == "":
+                    continue
+                context_list.append(
+                    Context(
+                        id = str(uuid.uuid4())[:8],
+                        type="audio transcript",
+                        content=transcript_chunk["text"],
+                        start_time=round(transcript_chunk["segments"][0]["start"]),
+                        end_time=round(transcript_chunk["segments"][-1]["end"])
+                    )
                 )
-            )
+        except Exception as e:
+            print("Couldn't transcribe the audio. Continuing without it.")
 
     print("Adding visual captions to context...")
     for job, keyframe in zip(captioning_jobs, keyframes):
