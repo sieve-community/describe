@@ -246,9 +246,9 @@ def main(
     print("Generating visual captions...")
     with ThreadPoolExecutor() as executor:
         if visual_detail == "ultra":
-            captioning_jobs = list(executor.map(process_scenes, scene_frames))
+            captioning_jobs = list(executor.map(process_scenes, scene_frames, timeout=300))
         else:
-            captioning_jobs = list(executor.map(process_keyframe, keyframe_paths))
+            captioning_jobs = list(executor.map(process_keyframe, keyframe_paths, timeout=300))
     
     # if image_only, return the captions and keyframes
     if image_only:
